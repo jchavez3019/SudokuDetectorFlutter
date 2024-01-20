@@ -11,16 +11,22 @@ by running
 './detectSudokuExample ../../../../sudoku_newspaper2.jpg'
 */
 
+char default_image_path [] = "../../../sudoku.png";
+
 int main (int argc, char **argv) {
+    char* img_path;
     if (argc < 2) {
-        printf("Please enter a file path to an image\n");
-        return -1;
+        printf("Using default image path %s\n", default_image_path);
+        img_path = default_image_path;
+    }
+    else {
+        img_path = argv[1];
     }
 
     /* first display the image so that the user can take a look at the image before it is processed */
-    printf("Using file path: %s\n", argv[1]);
+    printf("Using file path: %s\n", img_path);
     Mat final_img;
-    int result = sudoku::detectSudokuPuzzle(argv[1], final_img, false);
+    int result = sudoku::detectSudokuPuzzle(img_path, final_img, false);
     printf("Returned from sudoku::detectSudokuPuzzle with result %d\n", result);
     namedWindow("Final Image", WINDOW_AUTOSIZE);
     imshow("Final Image", final_img);

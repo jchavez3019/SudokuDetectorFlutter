@@ -6,12 +6,18 @@ This simple program takes a relative file path and displays the image. For examp
 by running './displayImageExample  ../../../../sudoku.png'
 */
 
+char default_image_path [] = "../../../sudoku.png";
+
 int main (int argc, char **argv) {
+    char* img_path;
     if (argc < 2) {
-        printf("Please enter a file path to an image\n");
-        return -1;
+        printf("Using default image path %s\n", default_image_path);
+        img_path = default_image_path;
     }
-    printf("Using file path: %s\n", argv[1]);
-    sudoku::displayImage(argv[1]);
+    else {
+        img_path = argv[1];
+    }
+    printf("Using file path: %s\n", img_path);
+    sudoku::displayImage(img_path);
     return 0;
 }
