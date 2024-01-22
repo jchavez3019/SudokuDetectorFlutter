@@ -56,6 +56,7 @@ dependencies:
 
   native_opencv:
     path: ../native_opencv
+  image_picker: ^1.0.7
 
 dev_dependencies:
   flutter_test:

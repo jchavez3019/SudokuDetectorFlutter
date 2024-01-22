@@ -3,6 +3,7 @@ import 'dart:developer';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_sudoku_app/camera_state.dart';
 import 'package:native_opencv/native_opencv.dart';
 import 'dart:io';
@@ -51,6 +52,9 @@ class MyApp extends StatelessWidget {
 
 class MyHomePage extends StatelessWidget {
   final String title;
+  OverlayEntry? entry;
+  late File selectedImage;
+  final picker = ImagePicker();
 
   MyHomePage({super.key, required this.title});
 
@@ -60,6 +64,76 @@ class MyHomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    /* Jorge Chavez
+    Description: This generates an overlay on the screen which provides
+    the user with the option to upload an image or take a picture with their
+    on device camera
+    */
+    void showOverlayOptions() {
+      entry = OverlayEntry(
+        builder: (context) => Stack(children: [
+          ModalBarrier(
+            onDismiss: () {
+              entry?.remove();
+            },
+          ),
+          Center(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.blue,
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment(0.8, 1),
+                  colors: <Color>[
+                    Color(0xff1f005c),
+                    Color(0xff5b0060),
+                    Color(0xff870160),
+                  ], // Gradient from https://learnui.design/tools/gradient-generator.html
+                  tileMode: TileMode.mirror,
+                ),
+                borderRadius: BorderRadius.circular(10.0),
+              ),
+              width: MediaQuery.of(context).size.width * (3 / 8),
+              height: MediaQuery.of(context).size.height / 5,
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.photo_library),
+                      label: const Text('Upload'),
+                      onPressed: () async {
+                        XFile galleryImg = await getImage();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                DisplayGalleryImage(displayImage: galleryImg),
+                          ),
+                        );
+                        entry?.remove();
+                      },
+                    ),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.photo_camera),
+                      label: const Text("Capture"),
+                      onPressed: () {
+                        entry?.remove();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ]),
+      );
+      final overlay = Overlay.of(context);
+      overlay.insert(entry!);
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Sudoku Solver"),
@@ -77,15 +151,15 @@ class MyHomePage extends StatelessWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        child: Icon(Icons.camera_alt),
+        child: Icon(Icons.add),
         onPressed: () {
-          log('--> OpenCV version ${nativeOpenCV.cvVersion()}');
-          Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) =>
-                      // Text('--> OpenCV version ${nativeOpenCV.cvVersion()}')));
-                      Text(nativeOpenCV.hello())));
+          showOverlayOptions();
+          // log('--> OpenCV version ${nativeOpenCV.cvVersion()}');
+          // Navigator.push(
+          //     context,
+          //     MaterialPageRoute(
+          //         builder: (_) =>
+          //             Text(nativeOpenCV.hello())));
           /* await for the available cameras to be returned then navigate */
           // await availableCameras().then((value) => Navigator.push(
           //       context,
@@ -93,6 +167,36 @@ class MyHomePage extends StatelessWidget {
           //           builder: (_) => TakePictureScreen(cameras: value)),
           //     ));
         },
+      ),
+    );
+  }
+
+  Future<XFile> getImage() async {
+    final pickedFile = await picker.pickImage(
+        source: ImageSource.gallery,
+        requestFullMetadata: true,
+        imageQuality: 100,
+        maxHeight: 1000,
+        maxWidth: 1000);
+    XFile xfilePick = pickedFile!;
+    return xfilePick!;
+  }
+}
+
+class DisplayGalleryImage extends StatelessWidget {
+  final XFile displayImage;
+  const DisplayGalleryImage({super.key, required this.displayImage});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Preview Page')),
+      body: Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Image.file(File(displayImage.path), fit: BoxFit.cover, width: 250),
+          const SizedBox(height: 24),
+          Text(displayImage.name)
+        ]),
       ),
     );
   }
