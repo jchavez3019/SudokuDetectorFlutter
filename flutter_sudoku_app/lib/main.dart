@@ -1,4 +1,5 @@
 import 'dart:developer';
+import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:camera/camera.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_sudoku_app/camera_state.dart';
 import 'package:native_opencv/native_opencv.dart';
+import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 
 import 'package:provider/provider.dart';
@@ -58,9 +60,7 @@ class MyHomePage extends StatelessWidget {
 
   MyHomePage({super.key, required this.title});
 
-  // final nativeOpencv =
-
-  final nativeOpenCV = NativeOpencv();
+  // final nativeOpenCV = NativeOpencv();
 
   @override
   Widget build(BuildContext context) {
@@ -105,7 +105,7 @@ class MyHomePage extends StatelessWidget {
                       icon: const Icon(Icons.photo_library),
                       label: const Text('Upload'),
                       onPressed: () async {
-                        XFile galleryImg = await getImage();
+                        XFile galleryImg = await getImage(false);
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -119,7 +119,15 @@ class MyHomePage extends StatelessWidget {
                     ElevatedButton.icon(
                       icon: const Icon(Icons.photo_camera),
                       label: const Text("Capture"),
-                      onPressed: () {
+                      onPressed: () async {
+                        XFile galleryImg = await getImage(true);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                DisplayGalleryImage(displayImage: galleryImg),
+                          ),
+                        );
                         entry?.remove();
                       },
                     ),
@@ -171,34 +179,72 @@ class MyHomePage extends StatelessWidget {
     );
   }
 
-  Future<XFile> getImage() async {
+  Future<XFile> getImage(bool useCamera) async {
     final pickedFile = await picker.pickImage(
-        source: ImageSource.gallery,
+        source: useCamera ? ImageSource.camera : ImageSource.gallery,
         requestFullMetadata: true,
         imageQuality: 100,
         maxHeight: 1000,
         maxWidth: 1000);
     XFile xfilePick = pickedFile!;
-    return xfilePick!;
+    return xfilePick;
   }
 }
 
-class DisplayGalleryImage extends StatelessWidget {
+class DisplayGalleryImage extends StatefulWidget {
   final XFile displayImage;
-  const DisplayGalleryImage({super.key, required this.displayImage});
+  XFile? alteredImage;
+
+  DisplayGalleryImage({super.key, required this.displayImage});
+
+  @override
+  State<DisplayGalleryImage> createState() => _DisplayGalleryImageState();
+}
+
+class _DisplayGalleryImageState extends State<DisplayGalleryImage> {
+  XFile get displayImage => widget.displayImage;
+  XFile? get alteredImage => widget.alteredImage;
+  set alteredImage(XFile? value) {
+    setState(() {
+      widget.alteredImage = value;
+    });
+  }
+
+  final nativeOpenCV = NativeOpencv();
 
   @override
   Widget build(BuildContext context) {
+    var bytes = widget.displayImage.readAsBytes().then((Uint8List contents) {
+      nativeOpenCV.initDetector(contents, 0);
+      /* returned an altered image and display this */
+      _saveImageToFile(nativeOpenCV.rotateImage(contents))
+          .then((File tempFile) {
+        alteredImage = XFile(tempFile.path);
+      });
+    });
     return Scaffold(
       appBar: AppBar(title: const Text('Preview Page')),
       body: Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Image.file(File(displayImage.path), fit: BoxFit.cover, width: 250),
+          // Image.file(File(displayImage.path), fit: BoxFit.cover, width: 250),
+          Image.file(
+              File(alteredImage == null
+                  ? displayImage.path
+                  : alteredImage!.path),
+              fit: BoxFit.cover,
+              width: 250),
           const SizedBox(height: 24),
-          Text(displayImage.name)
+          Text(widget.displayImage.name)
         ]),
       ),
     );
+  }
+
+  Future<File> _saveImageToFile(Uint8List data) async {
+    Directory tempDir = await getTemporaryDirectory();
+    File tempFile = File('${tempDir.path}/temp_image.jpg');
+    await tempFile.writeAsBytes(data);
+    return tempFile;
   }
 }
 
