@@ -1,6 +1,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include "ArucoDetector.h"
+#include "SudokuDetector.h"
 
 using namespace std;
 using namespace cv;
@@ -55,9 +56,28 @@ uint8_t* rotateImage(uint8_t* originalImage, int inBytesCount, int* finalSize) {
     vector<uint8_t> buffer(originalImage, originalImage + inBytesCount);
     Mat cv_image = imdecode(buffer, IMREAD_COLOR);
     rotateMat(cv_image, 90);
-    *finalSize = cv_image.total() * cv_image.elemSize();
+
     vector<uchar> buf;
     imencode(".jpg", cv_image, buf);
+    *finalSize = buf.size() * sizeof(uchar);
+    uint8_t* final_img = (uint8_t*)malloc(*finalSize);
+    memcpy(final_img, (uint8_t*)buf.data(), *finalSize);
+    return final_img;
+}
+
+__attribute__((visibility("default"))) __attribute__((used))
+uint8_t* detectSudokuPuzzle(uint8_t* originalImage, int inBytesCount, int* finalSize) {
+    /* make a copy of the original image */
+    vector<uint8_t> buffer(originalImage, originalImage + inBytesCount);
+    Mat cv_image = imdecode(buffer, IMREAD_COLOR);
+
+    /* detect the sudoku puzzle */
+    Mat sudoku_image;
+    sudoku::detectSudokuPuzzle(cv_image, sudoku_image, false);
+
+    /* return the final result */
+    vector<uchar> buf;
+    imencode(".jpg", sudoku_image, buf);
     *finalSize = buf.size() * sizeof(uchar);
     uint8_t* final_img = (uint8_t*)malloc(*finalSize);
     memcpy(final_img, (uint8_t*)buf.data(), *finalSize);

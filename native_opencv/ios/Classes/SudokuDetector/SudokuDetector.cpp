@@ -13,9 +13,6 @@ void sudoku::displayImage(const char* image_path) {
         printf("No image data\n");
         return;
     }
-    namedWindow("Display Image", WINDOW_AUTOSIZE);
-    imshow("Display Image", image);
-    waitKey(0);
 
     return;
 }
@@ -55,36 +52,17 @@ int _generalDetectSudokuPuzzle(cv::Mat &original_image, cv::Mat &final_img, bool
     /* apply a median blur to the image */
     medianBlur(gray_image, modified_image, 3);
 
-    if (display) {
-        namedWindow("Blur Image", WINDOW_AUTOSIZE);
-        imshow("Blur Image", modified_image);
-        waitKey(0);
-    }
     /* apply adaptive thresholding */
     adaptiveThreshold(modified_image, modified_image, 255, ADAPTIVE_THRESH_MEAN_C, THRESH_BINARY, 11, 2);
 
-    if (display) {
-        namedWindow("Adaptive Image", WINDOW_AUTOSIZE);
-        imshow("Adaptive Image", modified_image);
-        waitKey(0);
-    }
     /* apply the Canny edge detector */
     Canny(modified_image, modified_image, 250, 200);
-    if (display) {
-        namedWindow("Canny Image", WINDOW_AUTOSIZE);
-        imshow("Canny Image", modified_image);
-        waitKey(0);
-    }
+
     /* apply dilation */
     Mat kernel;
     kernel = Mat::ones(3, 3, CV_8U);
     dilate(modified_image, modified_image, kernel);
 
-    if (display) {
-        namedWindow("Dilated Image", WINDOW_AUTOSIZE);
-        imshow("Dilated Image", modified_image);
-        waitKey(0);
-    }
     /* extract the contours */
     vector<vector<Point>> contours;
     vector<Vec4i> hierarchy;
@@ -111,27 +89,12 @@ int _generalDetectSudokuPuzzle(cv::Mat &original_image, cv::Mat &final_img, bool
         }
     }
 
-    if (display) {
-        Scalar contourColor(0.0,255.0,0.0);
-        drawContours(colored_image, contours, area_indices[c_start], contourColor, 3);
-        namedWindow("Contour Image", WINDOW_AUTOSIZE);
-        imshow("Contour Image", colored_image);
-        waitKey(0);
-    }
     /* approximate the biggest contour into a nicer polygon shape */
     vector<Point> chosen_contour(contours[area_indices[c_start]]);
     vector<Point> approx;
     double perimeter = arcLength(chosen_contour, true) * 0.02;
     approxPolyDP(chosen_contour, approx, perimeter, true);
 
-    if (display) {
-        colored_image = original_image.clone();
-        Scalar contourColor(0.0,255.0,0.0);
-        drawContours(colored_image, vector<vector<Point>>(1, approx), 0, contourColor, 3);
-        namedWindow("Approx Image", WINDOW_AUTOSIZE);
-        imshow("Approx Image", colored_image);
-        waitKey(0);
-    }
     /* check that the modified contour has valid properties */
     double approx_area = contourArea(approx);
     if (!(approx.size() == 4 && fabs(approx_area) > 2000.0 && isContourConvex(approx))) {
@@ -159,13 +122,6 @@ int _generalDetectSudokuPuzzle(cv::Mat &original_image, cv::Mat &final_img, bool
     Size final_size(square_size, square_size);
     colored_image = original_image.clone();
     warpPerspective(colored_image, final_img, transformation_matrix, final_size);
-
-    /* display the final image */
-    if (display) {
-        namedWindow("Final Image", WINDOW_AUTOSIZE);
-        imshow("Final Image", final_img);
-        waitKey(0);
-    }
 
     return 0;
 }

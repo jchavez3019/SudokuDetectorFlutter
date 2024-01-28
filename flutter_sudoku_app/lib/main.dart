@@ -217,7 +217,7 @@ class _DisplayGalleryImageState extends State<DisplayGalleryImage> {
     var bytes = widget.displayImage.readAsBytes().then((Uint8List contents) {
       nativeOpenCV.initDetector(contents, 0);
       /* returned an altered image and display this */
-      _saveImageToFile(nativeOpenCV.rotateImage(contents))
+      _saveImageToFile(nativeOpenCV.detectSudokuPuzzle(contents))
           .then((File tempFile) {
         alteredImage = XFile(tempFile.path);
       });

@@ -23,6 +23,8 @@ typedef _c_detect = Pointer<Float> Function(Int32 width, Int32 height,
     Int32 rotation, Pointer<Uint8> bytes, Bool isYUV, Pointer<Int32> outCount);
 typedef _c_rotateImage = Pointer<Uint8> Function(
     Pointer<Uint8> originalImage, Int32 inSize, Pointer<Int32> finalSize);
+typedef _c_detectSudokuPuzzle = Pointer<Uint8> Function(
+    Pointer<Uint8> originalImage, Int32 inSize, Pointer<Int32> finalSize);
 
 // Dart Function Signatures
 typedef _dart_version = Pointer<Utf8> Function();
@@ -33,6 +35,8 @@ typedef _dart_destroyDetector = void Function();
 typedef _dart_detect = Pointer<Float> Function(int width, int height,
     int rotation, Pointer<Uint8> bytes, bool isYUV, Pointer<Int32> outCount);
 typedef _dart_rotateImage = Pointer<Uint8> Function(
+    Pointer<Uint8> originalImage, int inSize, Pointer<Int32> finalSize);
+typedef _dart_detectSudokuPuzzle = Pointer<Uint8> Function(
     Pointer<Uint8> originalImage, int inSize, Pointer<Int32> finalSize);
 
 // Create dart functions that invoke the C function
@@ -45,6 +49,9 @@ final _destroyDetector =
 final _detect = nativeLib.lookupFunction<_c_detect, _dart_detect>("detect");
 final _rotateImage =
     nativeLib.lookupFunction<_c_rotateImage, _dart_rotateImage>("rotateImage");
+final _detectSudokuPuzzle =
+    nativeLib.lookupFunction<_c_detectSudokuPuzzle, _dart_detectSudokuPuzzle>(
+        "detectSudokuPuzzle");
 
 final _hello = nativeLib.lookupFunction<_c_hello, _dart_hello>("hello");
 
@@ -94,6 +101,24 @@ class NativeOpencv {
     malloc.free(finalSizePtr);
 
     return rotatedImage.asTypedList(finalSize);
+  }
+
+  Uint8List detectSudokuPuzzle(Uint8List originalImage) {
+    var totalSize = originalImage.lengthInBytes;
+    var imgBuffer = malloc.allocate<Uint8>(totalSize);
+    Uint8List bytes = imgBuffer.asTypedList(totalSize);
+    bytes.setAll(0, originalImage);
+
+    Pointer<Int32> finalSizePtr = malloc.allocate<Int32>(1);
+
+    var sudokuImage = _detectSudokuPuzzle(imgBuffer, totalSize, finalSizePtr);
+
+    var finalSize = finalSizePtr.value;
+
+    malloc.free(imgBuffer);
+    malloc.free(finalSizePtr);
+
+    return sudokuImage.asTypedList(finalSize);
   }
 
   void destroy() {

@@ -32,5 +32,13 @@ int main (int argc, char **argv) {
     imshow("Final Image", final_img);
     waitKey(0);
 
+    /* now check the function overload */
+    Mat original_image = imread(img_path, IMREAD_COLOR);
+    result = sudoku::detectSudokuPuzzle(original_image, final_img, false);
+    printf("Returned from sudoku::detectSudokuPuzzle with result %d\n", result);
+    namedWindow("Final Image", WINDOW_AUTOSIZE);
+    imshow("Final Image", final_img);
+    waitKey(0);
+
     return 0;
 }
