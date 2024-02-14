@@ -34,7 +34,7 @@ int sudoku::detectSudokuPuzzle(cv::Mat &original_image, cv::Mat &final_img, bool
 }
 
 int _generalDetectSudokuPuzzle(cv::Mat &original_image, cv::Mat &final_img, bool display /* false */) {
-        Mat colored_image, gray_image;
+    Mat colored_image, gray_image;
 
     /* gray scale copy of the original image */
     cvtColor(original_image, gray_image, COLOR_BGRA2GRAY);
