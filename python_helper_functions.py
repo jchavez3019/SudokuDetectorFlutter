@@ -3,6 +3,9 @@ import numpy as np
 import cv2
 from PIL import Image
 from copy import copy
+import os
+import torch
+from torch.utils.data import DataLoader, TensorDataset, random_split
 
 def detectSudokuPuzzle(image_path, silent=True):
     original_image = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
@@ -101,3 +104,55 @@ def detectSudokuPuzzle(image_path, silent=True):
     plt.show()
 
     return result_img
+
+def parse_dat(dat_path):
+    numbers = []
+    with open(dat_path, 'r') as file:
+        for i, line in enumerate(file):
+            if i < 2:
+                continue
+            # Split the string into substrings based on spaces
+            number_strings = line.split()
+
+            # Convert each substring to an integer and store them in a list
+            numbers.append([int(num_str) for num_str in number_strings])
+
+    return np.array(numbers)
+
+def get_sudoku_dataset():
+
+    # Define the directory containing all the label directories
+    main_directory = './cell_dataset'
+
+    # Initialize lists to store image file paths and their corresponding labels
+    file_paths = []
+    labels = []
+
+    # Iterate over each label directory
+    for label in os.listdir(main_directory):
+        label_directory = os.path.join(main_directory, label)
+        if os.path.isdir(label_directory):
+            # Iterate over each image file in the label directory
+            for file in os.listdir(label_directory):
+                if file.endswith('.jpg'):
+                    # Append the file path and label to the respective lists
+                    file_path = os.path.join(label_directory, file)
+                    file_paths.append(file_path)
+                    labels.append(int(label))
+
+    labels = np.array(labels, dtype=np.int32)
+    labels = torch.tensor(labels)
+    all_images = np.array([cv2.resize(cv2.imread(path, cv2.IMREAD_GRAYSCALE), (50,50)).astype(np.float32)/255.0 for path in file_paths])
+    all_images = torch.tensor(all_images)
+    all_images = all_images.unsqueeze(1)
+    print(f"Shape labels: {labels.shape}, dtype: {labels.dtype}")
+    print(f"Shape all_images: {all_images.shape}, dtype: {all_images.dtype}")
+
+    dataset = TensorDataset(all_images, labels)
+    train_size = int(0.8 * len(labels))
+    test_size = len(labels) - train_size
+
+    train_data, test_data = random_split(dataset, [train_size, test_size])
+    single_image_dimension = all_images.shape[1:]
+    
+    return train_data, test_data, single_image_dimension
