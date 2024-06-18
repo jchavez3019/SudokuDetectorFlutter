@@ -6,9 +6,9 @@ using namespace cv;
 /*
 This simple program takes a relative file path and displays the image. For example, you may enter a sudoku puzzle image from this repo
 by running 
-'./detectSudokuExample  ../../../../sudoku.png'
-'./detectSudokuExample ../../../../sudoku_newspaper.jpeg'
-'./detectSudokuExample ../../../../sudoku_newspaper2.jpg'
+'./detectSudokuExample  ../../../sudoku.png'
+'./detectSudokuExample ../../../sudoku_newspaper.jpeg'
+'./detectSudokuExample ../../../sudoku_newspaper2.jpg'
 */
 
 char default_image_path [] = "../../../sudoku.png";

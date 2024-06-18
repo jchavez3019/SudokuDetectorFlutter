@@ -38,8 +38,11 @@ const int correct_indices [][list_size] = {
 using namespace std;
 using namespace helper;
 
-/* first element is correct */
-TEST(TestHelperSuite, TestMergeOne) {
+TEST(TestHelperSuite, TestMergeOne)
+/**
+ * @brief Checks the output given that the first element in the given list is correct
+ */
+{
     const int test_num = 0;
 
     /* check that the list is sorted correctly */
@@ -57,8 +60,11 @@ TEST(TestHelperSuite, TestMergeOne) {
     EXPECT_TRUE(arraysEqual(check_arr_indices, correct_indices[test_num], list_size)) << "Sorted indices are incorrect";
 }
 
-/* last element is correct */
-TEST(TestHelperSuite, TestMergeTwo) {
+TEST(TestHelperSuite, TestMergeTwo)
+/**
+ * @brief Checks the output given that the last element in the given list is correct
+ */
+{
     const int test_num = 1;
 
     /* check that the list is sorted correctly */
@@ -76,8 +82,11 @@ TEST(TestHelperSuite, TestMergeTwo) {
     EXPECT_TRUE(arraysEqual(check_arr_indices, correct_indices[test_num], list_size)) << "Sorted indices are incorrect";
 }
 
-/* first and last element are correct, middle elements are reversed */
-TEST(TestHelperSuite, TestMergeThree) {
+TEST(TestHelperSuite, TestMergeThree)
+/**
+ * @brief Checks the output on a list where the first and last element are correct but the middle elements are reversed.
+ */
+{
     const int test_num = 2;
 
     /* check that the list is sorted correctly */
@@ -95,9 +104,11 @@ TEST(TestHelperSuite, TestMergeThree) {
     EXPECT_TRUE(arraysEqual(check_arr_indices, correct_indices[test_num], list_size)) << "Sorted indices are incorrect";
 }
 
-
-/* all elements are in an incorrect order*/
-TEST(TestHelperSuite, TestMergeFour) {
+TEST(TestHelperSuite, TestMergeFour)
+/**
+ * @brief Ensures all elements are in the correct order given a list that is out of order
+ */
+{
     const int test_num = 3;
 
     /* check that the list is sorted correctly */
@@ -115,8 +126,11 @@ TEST(TestHelperSuite, TestMergeFour) {
     EXPECT_TRUE(arraysEqual(check_arr_indices, correct_indices[test_num], list_size)) << "Sorted indices are incorrect";
 }
 
-/* list is already in order */
-TEST(TestHelperSuite, TestMergeFive) {
+TEST(TestHelperSuite, TestMergeFive)
+/**
+ * @brief Given a list already in order, ensures the output is the same order
+ */
+{
     const int test_num = 4;
 
     /* check that the list is sorted correctly */
@@ -135,7 +149,11 @@ TEST(TestHelperSuite, TestMergeFive) {
 }
 
 /* list is reversed */
-TEST(TestHelperSuite, TestMergeSix) {
+TEST(TestHelperSuite, TestMergeSix)
+/**
+ * @brief Checks the output on a list whose order is reversed
+ */
+{
     const int test_num = 5;
 
     /* check that the list is sorted correctly */

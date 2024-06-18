@@ -5,7 +5,12 @@ using namespace cv;
 
 int _generalDetectSudokuPuzzle(cv::Mat &original_image, cv::Mat &final_img, bool display = false);
 
-void sudoku::displayImage(const char* image_path) {
+void sudoku::displayImage(const char* image_path)
+/**
+ * @brief Takes the path to an image and displays it using OpenCV
+ * @param image_path
+ */
+{
     Mat image;
     image = imread(image_path, IMREAD_COLOR);
 
@@ -20,7 +25,15 @@ void sudoku::displayImage(const char* image_path) {
     return;
 }
 
-int sudoku::detectSudokuPuzzle(const char *image_path, Mat &final_img, bool display /* false */) {
+int sudoku::detectSudokuPuzzle(const char *image_path, Mat &final_img, bool display /* false */)
+/**
+ * @brief Function overload on detectSudokuPuzzle that takes a path to the original image
+ * @param image_path
+ * @param final_img
+ * @param display
+ * @return
+ */
+{
     Mat original_image;
     
     /* original image to never be modified */
@@ -29,11 +42,27 @@ int sudoku::detectSudokuPuzzle(const char *image_path, Mat &final_img, bool disp
     return _generalDetectSudokuPuzzle(original_image, final_img, display);
 }
 
-int sudoku::detectSudokuPuzzle(cv::Mat &original_image, cv::Mat &final_img, bool display /* false */) {
+int sudoku::detectSudokuPuzzle(cv::Mat &original_image, cv::Mat &final_img, bool display /* false */)
+/**
+ * @brief Function overload on detectSudokuPuzzle that takes the original image as a CV Matrix
+ * @param original_image
+ * @param final_img
+ * @param display
+ * @return
+ */
+{
     return _generalDetectSudokuPuzzle(original_image, final_img, display);
 }
 
-int _generalDetectSudokuPuzzle(cv::Mat &original_image, cv::Mat &final_img, bool display /* false */) {
+int _generalDetectSudokuPuzzle(cv::Mat &original_image, cv::Mat &final_img, bool display /* false */)
+/**
+ * @brief
+ * @param original_image A CV matrix of the original image
+ * @param final_img A reference to a CV matrix to save the final output to
+ * @param display flag that when set to true, displays the processed image at each intermediate step
+ * @return 0 on success, -1 on error
+ */
+{
     Mat colored_image, gray_image;
 
     /* gray scale copy of the original image */

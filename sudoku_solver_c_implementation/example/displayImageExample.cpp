@@ -3,7 +3,7 @@
 
 /*
 This simple program takes a relative file path and displays the image. For example, you may enter a sudoku puzzle image from this repo
-by running './displayImageExample  ../../../../sudoku.png'
+by running './displayImageExample  ../../../sudoku.png'
 */
 
 char default_image_path [] = "../../../sudoku.png";
