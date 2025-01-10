@@ -26,6 +26,16 @@ This repository contains multiple directories that serve various purposes. The m
 
 ### Python Setup
 
+Create a Conda environment with the following command:
+```shell
+conda env create -n SudokuSolverProject jupyter python=3.10.12
+```
+
+Then install the requirements using pip:
+```shell
+pip install -r requirements.txt
+```
+
 ## Preview
 
 To show the progess thus far, below is an example of a puzzle being extracted from a gallery image on the Flutter application. 

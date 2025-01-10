@@ -6,13 +6,14 @@ from torch.utils.data.dataset import Subset
 from torch import Tensor, Size
 from tqdm import tqdm
 from typing import Union, Tuple
+from torch.utils.mobile_optimizer import optimize_for_mobile
 
 from python_helper_functions import get_sudoku_dataset
 
-save_model = True
+save_model = False
 model_path = "./models/"
-model_name = "NumberModel_v0.pth"
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+model_name = "NumberModel_v0"
+device = torch.device('cuda')
 
 
 class BasicBlock(nn.Module):
@@ -67,7 +68,7 @@ class NumberModel(nn.Module):
         super(NumberModel, self).__init__()
 
         block = BasicBlock
-        layers = [2, 2, 2, 2]
+        layers = [2, 2, 2, 2]  # number of blocks in each residual layer
         self.in_channels = 64
 
         self.model = nn.Sequential(
@@ -214,7 +215,14 @@ def fit(
             "image_dim": image_dim[0],
             "out_size": 10
         }
-        torch.save(pth_dict, model_path + model_name)
+        torch.save(pth_dict, model_path + model_name + ".pth")
+        NetObject.to(device='cpu')
+        samples = torch.rand(10, 1, 50, 50)
+        output = NetObject(samples)
+        print(f"output.dtype: {output.dtype}")
+        traced_script_module = torch.jit.trace(NetObject, samples)
+        optimized_traced_model = optimize_for_mobile(traced_script_module)
+        optimized_traced_model._save_for_lite_interpreter(model_path + model_name + "_mobile.pt")
 
     return losses, NetObject
 
@@ -223,7 +231,7 @@ if __name__ == "__main__":
     """
     Trains and tests the accuracy of the network
     """
-    train_data, test_data, single_image_dimension = get_sudoku_dataset()
+    train_data, test_data, single_image_dimension = get_sudoku_dataset(verbose=True)
     params = {
         "train_dataset": train_data,
         "test_dataset": test_data,
