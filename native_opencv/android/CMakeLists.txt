@@ -4,7 +4,9 @@ cmake_minimum_required(VERSION 3.10.2)
 set(OpenCV_STATIC ON)
 set(OpenCV_CUDA OFF)
 #set(OpenCV_DIR $ENV{OPENCV_ANDROID}/sdk/native/jni) # only works for Windows
-set(OpenCV_DIR /home/jorgejc2/Documents/OpenCV-android-sdk/sdk/native/jni)
+# Here, I set the path to the android-sdk locally on my machine
+# set(OpenCV_DIR /home/jorgejc2/Documents/OpenCV-android-sdk/sdk/native/jni)
+set(OpenCV_DIR /home/jorgejc2/Documents/opencv-4.11.0-android-sdk/OpenCV-android-sdk/sdk/native/jni)
 find_package (OpenCV REQUIRED)
 
 add_library( # Sets the name of the library.

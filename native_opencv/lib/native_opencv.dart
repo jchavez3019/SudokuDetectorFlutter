@@ -24,7 +24,11 @@ typedef _c_detect = Pointer<Float> Function(Int32 width, Int32 height,
 typedef _c_rotateImage = Pointer<Uint8> Function(
     Pointer<Uint8> originalImage, Int32 inSize, Pointer<Int32> finalSize);
 typedef _c_detectSudokuPuzzle = Pointer<Uint8> Function(
-    Pointer<Uint8> originalImage, Int32 inSize, Pointer<Int32> finalSize);
+    Pointer<Uint8> originalImage,
+    Int32 inSize,
+    Int32 target_width,
+    Int32 target_height,
+    Pointer<Int32> finalSize);
 
 // Dart Function Signatures
 typedef _dart_version = Pointer<Utf8> Function();
@@ -37,7 +41,11 @@ typedef _dart_detect = Pointer<Float> Function(int width, int height,
 typedef _dart_rotateImage = Pointer<Uint8> Function(
     Pointer<Uint8> originalImage, int inSize, Pointer<Int32> finalSize);
 typedef _dart_detectSudokuPuzzle = Pointer<Uint8> Function(
-    Pointer<Uint8> originalImage, int inSize, Pointer<Int32> finalSize);
+    Pointer<Uint8> originalImage,
+    int inSize,
+    int target_width,
+    int target_height,
+    Pointer<Int32> finalSize);
 
 // Create dart functions that invoke the C function
 final _version = nativeLib.lookupFunction<_c_version, _dart_version>("version");
@@ -106,12 +114,16 @@ class NativeOpencv {
   Uint8List detectSudokuPuzzle(Uint8List originalImage) {
     var totalSize = originalImage.lengthInBytes;
     var imgBuffer = malloc.allocate<Uint8>(totalSize);
+    int target_width = 9 * 50;
+    int target_height = 9 * 50;
     Uint8List bytes = imgBuffer.asTypedList(totalSize);
     bytes.setAll(0, originalImage);
 
     Pointer<Int32> finalSizePtr = malloc.allocate<Int32>(1);
 
-    var sudokuImage = _detectSudokuPuzzle(imgBuffer, totalSize, finalSizePtr);
+    /* call the C++ detectSudokuPuzzle method */
+    var sudokuImage = _detectSudokuPuzzle(
+        imgBuffer, totalSize, target_width, target_height, finalSizePtr);
 
     var finalSize = finalSizePtr.value;
 

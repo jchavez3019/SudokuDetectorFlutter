@@ -1,9 +1,14 @@
 import 'dart:developer';
 import 'dart:typed_data';
+import 'package:tuple/tuple.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_sudoku_app/services/NativeOpenCVState.dart';
+import 'package:flutter_sudoku_app/services/TFLiteInterpreterState.dart';
+import 'package:image/image.dart' as img;
 import 'package:flutter_sudoku_app/services/loading.dart';
 import 'package:flutter_sudoku_app/theme.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,6 +16,11 @@ import 'package:flutter_sudoku_app/camera_state.dart';
 import 'package:native_opencv/native_opencv.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+
+// import 'package:pytorch_mobile/pytorch_mobile.dart';
+// import 'package:pytorch_mobile/model.dart';
+// import 'package:flutter_pytorch/flutter_pytorch.dart';
+// import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
 
 import 'package:provider/provider.dart';
 
@@ -105,15 +115,17 @@ class _MyHomePageState extends State<MyHomePage> {
                       label: const Text('Upload'),
                       onPressed: () {
                         getImage(false).then((XFile galleryImg) {
-                          Navigator.push(
-                            context,
+                          Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) =>
-                                  // DisplayGalleryImage(displayImage: galleryImg),
-                                  DisplayPreviewImage(
-                                displayImage: galleryImg,
-                                isUpload: true,
+                              builder: (BuildContext context) =>
+                                  ChangeNotifierProvider<NativeOpencvState>(
+                                create: (_) => NativeOpencvState(),
+                                child: DisplayPreviewImage(
+                                  displayImage: galleryImg,
+                                  isUpload: true,
+                                ),
                               ),
+                              // DisplayGalleryImage(displayImage: galleryImg),
                             ),
                           );
                           entry?.remove();
@@ -185,6 +197,11 @@ class _MyHomePageState extends State<MyHomePage> {
 }
 
 class DisplayPreviewImage extends StatefulWidget {
+  /*
+  This class displays a preview image of a warped version of the user's selected
+  photo. They can then choose to proceed if the warped image looks correct
+  or they can reattempt to upload an image. 
+  */
   XFile displayImage;
   final bool isUpload;
 
@@ -207,17 +224,24 @@ class _DisplayPreviewImageState extends State<DisplayPreviewImage> {
     });
   }
 
-  final nativeOpenCV = NativeOpencv();
-
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-        future: _getWarpedImage(),
+    NativeOpencvState nativeOpenCV = Provider.of<NativeOpencvState>(context);
+
+    return FutureBuilder<XFile>(
+        future: nativeOpenCV.getWarpedImage(displayImage),
         builder: (context, snapshot) {
           /* the snapshot has not arrived or there was an error */
           if (!snapshot.hasData || snapshot.hasError) {
             return const Loader();
+          } else if (snapshot.hasError) {
+            return ErrorWidget(Text(
+              "Error getting the warped image",
+              style: Theme.of(context).textTheme.bodyMedium,
+            ));
           } else {
+            // we have recieved the warpedImage successfully
+
             XFile warpedImage = snapshot.data!;
 
             return Scaffold(
@@ -246,7 +270,16 @@ class _DisplayPreviewImageState extends State<DisplayPreviewImage> {
                             icon: const Icon(Icons.cancel),
                             label: const Text("Retry")),
                         ElevatedButton.icon(
-                            onPressed: () {},
+                            onPressed: () {
+                              Navigator.of(context).push(MaterialPageRoute(
+                                builder: (BuildContext context) =>
+                                    ChangeNotifierProvider<
+                                            TFLiteInterpreterState>(
+                                        create: (_) => TFLiteInterpreterState(),
+                                        child: DisplayInferredSudokuPuzzle(
+                                            warpedImage: warpedImage)),
+                              ));
+                            },
                             icon: const Icon(Icons.check_circle),
                             label: const Text("Proceed")),
                       ],
@@ -265,23 +298,6 @@ class _DisplayPreviewImageState extends State<DisplayPreviewImage> {
           }
         });
   }
-
-  Future<XFile> _getWarpedImage() async {
-    Uint8List bytes = await widget.displayImage.readAsBytes();
-    File tempFile = await _saveImageToFile(
-        nativeOpenCV.detectSudokuPuzzle(bytes),
-        prefix: "warpedImage");
-    return XFile(tempFile.path);
-  }
-
-  Future<File> _saveImageToFile(Uint8List data,
-      {String prefix = "temp_image"}) async {
-    Directory tempDir = await getTemporaryDirectory();
-    File tempFile = File(
-        '${tempDir.path}/${prefix}_${DateTime.now().millisecondsSinceEpoch}.jpg');
-    await tempFile.writeAsBytes(data);
-    return tempFile;
-  }
 }
 
 Future<XFile> getImage(bool useCamera) async {
@@ -293,6 +309,220 @@ Future<XFile> getImage(bool useCamera) async {
       maxWidth: 1000);
   XFile xfilePick = pickedFile!;
   return xfilePick;
+}
+
+class DisplayInferredSudokuPuzzle extends StatefulWidget {
+  /* 
+  This class takes the previously warped image and infers what digit is in 
+  each cell. 
+  */
+  XFile warpedImage;
+
+  DisplayInferredSudokuPuzzle({super.key, required this.warpedImage});
+
+  @override
+  State<DisplayInferredSudokuPuzzle> createState() =>
+      _DisplayInferredSudokuPuzzleState();
+}
+
+class _DisplayInferredSudokuPuzzleState
+    extends State<DisplayInferredSudokuPuzzle> {
+  /* private variables */
+  bool _show_labels = true; // when true, overlays the 9x9 grid of images with their labels
+  List<Tuple2<XFile, int>>? _cached_predictions; // will hold the initial partitioned cells and their predictions
+  List<int>? _modified_labels; // holds the initial predictions but can be modified by the user (e.g., maybe some were incorrect)
+  bool _is_loading = true; // false once the initial predictions have been made
+  String? _error; // non-empty if an error encountered when running predictions
+
+  int _num_correct = 0; // number of label predictions that are correct
+  int _num_edited = 0; // number of labels that have been editted by the user
+  double _accuracy = 0; // accuracy of the model thus far
+
+  /* getters */
+  XFile get warpedImage => widget.warpedImage;
+  /* setters */
+  set warpedImage(XFile newImage) {
+    setState(() {});
+    widget.warpedImage = newImage;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPredictions();
+  }
+
+  Future<void> _loadPredictions() async {
+    try {
+      // partition the warped image and run inference on each cell
+      final tflis = Provider.of<TFLiteInterpreterState>(context, listen: false);
+      final result = await tflis.getPartitionedPredictions(warpedImage);
+      setState(() {
+        _cached_predictions = result;
+        _modified_labels = result.map((e) => e.item2).toList();
+        _is_loading = false;
+        _num_correct = 81;
+        _accuracy = 100.0;
+      });
+    } catch (e) {
+      // there was an error trying to run inference
+      setState(() {
+        _error = "Error getting the inferred image.";
+        _is_loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_is_loading) {
+      return const Scaffold(body: Loader());
+    }
+
+    if (_error != null || _modified_labels == null) {
+      return Scaffold(
+        body: Center(
+          child: Text(
+            _error ?? "Unknown error",
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ),
+      );
+    }
+
+    final image_cells = _cached_predictions!.map((e) => e.item1).toList();
+    final labels = _modified_labels!;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Partitioned Predictions'),
+        actions: [
+          IconButton(
+              icon: Icon(_show_labels ? Icons.visibility_off : Icons.visibility),
+              onPressed: () {
+                setState(() {
+                  _show_labels = !_show_labels;
+                });
+              }
+          )
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: GridView.builder(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 9,
+                crossAxisSpacing: 2.0,
+                mainAxisSpacing: 2.0,
+              ),
+              itemCount: image_cells.length,
+              itemBuilder: (context, index) {
+                final image = image_cells[index];
+                final label = labels[index];
+
+                return GestureDetector(
+                  onTap: () async {
+                    final controller = TextEditingController(text: '$label');
+                    int? newLabel = await showDialog<int>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text("Edit Label"),
+                        content: TextField(
+                          controller: controller,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: "New label"),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text("Cancel"),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              final parsed = int.tryParse(controller.text);
+                              if (parsed != null) {
+                                Navigator.of(context).pop(parsed);
+                              }
+                            },
+                            child: const Text("OK"),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (newLabel != null) {
+                      var new_num_editted = 0;
+                      var new_num_correct = 0;
+                      for (int i = 0; i < 81; i++) {
+                        if (index != i && _cached_predictions![i].item2 != _modified_labels![i] ||
+                            (index == i && _cached_predictions![i].item2 != newLabel)) {
+                          // count the number of modified labels that do not match the
+                          // originally predicted labels
+                          new_num_editted++;
+                        }
+                        else {
+                          // if the modified label matches the original prediction,
+                          // we assume that this means the prediction was correct
+                          new_num_correct++;
+                        }
+                      }
+                      var new_accuracy = (new_num_correct / 81.0) * 100.0;
+                      setState(() {
+                        _modified_labels![index] = newLabel;
+                        _num_edited = new_num_editted;
+                        _num_correct = new_num_correct;
+                        _accuracy = new_accuracy;
+                      });
+                    }
+                  },
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Image.file(File(image.path), fit: BoxFit.cover),
+                      if (_show_labels)
+                        Positioned(
+                          bottom: 10,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            color: Colors.black54,
+                            child: Text(
+                              "$label",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          // instruction block for the user
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Text(
+              "Tap on any cell to edit its label. Use the toggle in the top-right to show/hide labels.",
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+          // display the accuracy of the inference
+          Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: Text(
+          "Edited: $_num_edited / 81 | Accuracy: ${_accuracy.toStringAsFixed(1)}%",
+          style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          ),
+        ],
+      ),
+    );
+
+  }
 }
 
 

@@ -65,15 +65,26 @@ uint8_t* rotateImage(uint8_t* originalImage, int inBytesCount, int* finalSize) {
     return final_img;
 }
 
+/* Jorge Chavez
+ * Description:
+ * Inputs: 
+ *      uint8_t* originalImage -- pointer to the original image
+ *      int inBytesCount -- number of bytes the origina image takes
+ *      int target_width -- target width of the final image 
+ *      int target_height -- target height of the final image
+ * Outputs:
+ *      int* finalSize -- number of bytes the final image takes
+*/
 __attribute__((visibility("default"))) __attribute__((used))
-uint8_t* detectSudokuPuzzle(uint8_t* originalImage, int inBytesCount, int* finalSize) {
+uint8_t* detectSudokuPuzzle(uint8_t* originalImage, int inBytesCount, int target_width, int target_height, int* finalSize) {
     /* make a copy of the original image */
     vector<uint8_t> buffer(originalImage, originalImage + inBytesCount);
+    /* load in the buffer as an opencv image */
     Mat cv_image = imdecode(buffer, IMREAD_COLOR);
 
     /* detect the sudoku puzzle */
     Mat sudoku_image;
-    sudoku::detectSudokuPuzzle(cv_image, sudoku_image, false);
+    sudoku::detectSudokuPuzzle(cv_image, sudoku_image, make_tuple(target_width, target_height), true, false);
 
     /* return the final result */
     vector<uchar> buf;
