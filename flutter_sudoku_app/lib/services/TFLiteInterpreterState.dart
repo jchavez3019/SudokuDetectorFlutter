@@ -12,19 +12,27 @@ import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
 import 'package:image/image.dart' as img;
 
 class TFLiteInterpreterState extends ChangeNotifier {
+
+  // the path the the .tflite model
   // final String _pathNumberModel = "assets/NumberModel_v0.tflite";
   final String _pathNumberModel = "assets/test_number_model.tflite";
 
+  // the tflite interpreter used to run inference
   late tfl.Interpreter interpreter;
 
-  bool initialized = false;
+  bool initialized = false; // true if nn model has been loaded in
 
-  /*
-    This function takes a preprocessed image, partitions it into a 9x9 grid,
-    and runs digit inference on each cell. 
-  */
+  /// Description: This function takes a preprocessed image, partitions it into
+  /// a 9x9 grid, and runs digit inference on each cell.
+  ///
+  /// **Parameters**:
+  /// - warpedImg: The image to parse and run inference upon.
+  /// **Returns**:
+  /// - A list of 81 tuples where each tuple contains its parsed grid and its
+  /// number prediction.
   Future<List<Tuple2<XFile, int>>> getPartitionedPredictions(XFile warpedImg) async {
     if (!initialized) {
+      // the neural network has not been loaded in yet
       interpreter = await tfl.Interpreter.fromAsset(_pathNumberModel);
       initialized = true;
     }
@@ -51,11 +59,12 @@ class TFLiteInterpreterState extends ChangeNotifier {
     for (int i = 0; i < partionedImgCells.length; i++) {
       interpreter.run(partionedImgCells[i].item2.reshape([1, 50, 50, 1]), outputs[i]);
     }
+    // TODO: It would be nice to understand why this method does not work.
     // interpreter.runForMultipleInputs([partionedImgCells], outputs);
 
-    log("output 0: ${outputs[0]}");
-
+    // iterate through each partitioned image
     for (int i = 0; i < partionedImgCells.length; i++) {
+      // get the cell's 10 logit outputs
       List<double> currOutput = outputs[i][0];
 
       // we use the reduce method to get the maximum logit value
@@ -67,22 +76,28 @@ class TFLiteInterpreterState extends ChangeNotifier {
 
       // append the predicted label
       result.add(predictedLabel);
-
-      // outputs[i] = List<double>.filled(10, 0);
     }
     log("prediction results: ${result}");
 
+    // put the parsed images and their predicted labels in the desired format
     List<Tuple2<XFile, int>> final_result = List.generate(81,
         (i) => Tuple2(partionedImgCells[i].item1, result[i]));
 
     return final_result;
   }
 
-  /*
-    This function takes an image and partitions them into an even 9x9 grid. 
-    The resulting images are flattened and returned as a list of 81 images.
-  */
-  // Future<List<Uint8List>> partitionImage(XFile imageFile) async {
+
+  /// Description: This function takes an image and partitions them into an even
+  /// 9x9 grid. The resulting images are flattened and returned as a list of 81
+  /// images.
+  ///
+  /// **Parameters**:
+  /// - imageFile: The warped image of the sudoku puzzle which we wish to partition
+  ///
+  /// **Returns**:
+  /// - List of tuples where the first tuple element is the parsed image as an XFile (best
+  ///   compatible for rendering in Flutter), and the second element is the decoded image (the
+  ///   image as a list of bytes, best for running inference)
   Future<List<Tuple2<XFile, List<List<List<double>>>>>> partitionImage(XFile imageFile) async {
     // Read the image from the XFile
     Uint8List imageData = await imageFile.readAsBytes();
@@ -98,7 +113,6 @@ class TFLiteInterpreterState extends ChangeNotifier {
     int partitionWidth = (image.width / 9).floor();
     int partitionHeight = (image.height / 9).floor();
 
-    // List<Float32List> partitions = [];
     List<List<List<List<double>>>> partitions_in_bytes = List.generate(
       81,
           (_) => List.generate(
@@ -111,6 +125,7 @@ class TFLiteInterpreterState extends ChangeNotifier {
     );
     List<img.Image> image_partitions = [];
 
+    // iterate through each parsed image
     for (int i = 0; i < 81; i++) {
       int row = i ~/ 9;
       int col = i % 9;
@@ -124,6 +139,8 @@ class TFLiteInterpreterState extends ChangeNotifier {
       );
       image_partitions.add(partition);
 
+      // iterate through each pixel of the image to convert the pixels
+      // to grayscale
       for (int y = 0; y < 50; y++) {
         for (int x = 0; x < 50; x++) {
           int pixel = partition.getPixel(x, y);
@@ -131,13 +148,6 @@ class TFLiteInterpreterState extends ChangeNotifier {
           partitions_in_bytes[i][y][x][0] = gray / 255;
         }
       }
-
-      // // Encode the partition back to Uint8List
-      // // Uint8List partitionData = Uint8List.fromList(img.encodeJpg(partition));
-      // Float32List partitionData = imageToFloat32(partition);
-      // // partitions.add(partitionData.reshape([50, 50, 1]));
-      // tensor.setRange(offset, offset + partitionData.length, partitionData);
-      // offset += partitionData.length;
     }
 
     // convert all the images to XFiles
@@ -149,15 +159,22 @@ class TFLiteInterpreterState extends ChangeNotifier {
 
     return partitions;
   }
-  /*
-    This takes an image and reformats it to a Float32List
-   */
+
+  /// Description: This takes an image and reformats it to a Float32List
+  ///
+  /// **Parameters**:
+  /// - image: Converts an image to grayscale.
+  ///
+  /// **Parameters**:
+  /// - A float list of the decoded image in grayscale.
   Float32List imageToFloat32(img.Image image) {
-    final input = Float32List(50 * 50);
+    int width = image.width;
+    int height= image.height;
+    final input = Float32List(width * height);
     int index = 0;
 
-    for (int y = 0; y < 50; y++) {
-      for (int x = 0; x < 50; x++) {
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
         int pixel = image.getPixel(x, y);
         int gray = img.getLuminance(pixel);
         input[index++] = gray / 255.0;
@@ -167,9 +184,13 @@ class TFLiteInterpreterState extends ChangeNotifier {
     return input;
   }
 
-  /* Jorge Chavez
-   * Description: Converts a list of images to a list of XFiles
-   */
+  /// Description: Converts a list of images to a list of XFiles
+  ///
+  /// **Parameters**:
+  /// - images: List of images to convert to XFile format.
+  ///
+  /// **Returns**:
+  /// - List of images in XFile format.
   Future<List<XFile>> imagesToXFiles(List<img.Image> images) async {
     List<XFile> xfileImages = [];
 
@@ -193,9 +214,16 @@ class TFLiteInterpreterState extends ChangeNotifier {
     return xfileImages;
   }
 
-  /*
-    This functiontakes an image and resizes it to the desired width and height.
-  */
+  /// Description: Takes an image and resizes it to the desired width and
+  /// height.
+  ///
+  /// **Parameters**:
+  /// - xfile: The image to resize
+  /// - width: Target width
+  /// - height: Target height
+  ///
+  /// **Returns**:
+  /// - The resized image.
   Future<XFile> resizeImage(XFile xfile, int width, int height) async {
     final bytes = await xfile.readAsBytes();
     final image = img.decodeImage(bytes);

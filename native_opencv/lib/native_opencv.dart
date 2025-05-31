@@ -111,6 +111,14 @@ class NativeOpencv {
     return rotatedImage.asTypedList(finalSize);
   }
 
+  /// Description: Contrary to the function name, this method does not detect
+  /// the sudoku puzzle. Instead, it performs a series of image processing steps
+  /// in order best extract the sudoku puzzle from a camera image. Ideally,
+  /// the returned image will be a bird's eye view of the sudoku puzzle with
+  /// the puzzle taking up the entire image.
+  ///
+  /// **Parameters**:
+  /// - originalImage: A list of bytes containing the decoded image.
   Uint8List detectSudokuPuzzle(Uint8List originalImage) {
     var totalSize = originalImage.lengthInBytes;
     var imgBuffer = malloc.allocate<Uint8>(totalSize);

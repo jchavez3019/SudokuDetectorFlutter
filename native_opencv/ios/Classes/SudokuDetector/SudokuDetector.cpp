@@ -5,6 +5,11 @@ using namespace cv;
 
 int _generalDetectSudokuPuzzle(cv::Mat &original_image, cv::Mat &final_img, std::tuple<int, int> new_size, bool use_new_size /* false */, bool display /* false */);
 
+/**
+ * @author Jorge Chavez
+ * @brief reads in an image in color, but this function really doesn't do anything.
+ * @param image_path: Path to the image to open.
+ */
 void sudoku::displayImage(const char* image_path) {
     Mat image;
     image = imread(image_path, IMREAD_COLOR);
@@ -17,6 +22,17 @@ void sudoku::displayImage(const char* image_path) {
     return;
 }
 
+/**
+ * @author  Jorge Chavez
+ * @brief   Given a path to an image, runs our vision processing pipeline in order to get a bird's
+ *          eye view of the sudoku board.
+ * @param image_path:   Path to the image to open.
+ * @param final_img:    Holds the final processed image.
+ * @param new_size:     The size the final image should take if `use_new_size` is true.
+ * @param use_new_size: If True, the final image is resized to the target size, `new_size`.
+ * @param display:      If True, displays the transformed images. Supported on desktop, not Android.
+ * @return
+ */
 int sudoku::detectSudokuPuzzle(const char *image_path, Mat &final_img, std::tuple<int, int> new_size, bool use_new_size /* false */, bool display /* false */) {
     Mat original_image;
     
@@ -26,10 +42,30 @@ int sudoku::detectSudokuPuzzle(const char *image_path, Mat &final_img, std::tupl
     return _generalDetectSudokuPuzzle(original_image, final_img, new_size, use_new_size, display);
 }
 
+/**
+ * @author  Jorge Chavez
+ * @brief   Given a CV image, runs our vision processing pipeline in order to get a bird's
+ *          eye view of the sudoku board.
+ * @param original_image:   CV image to process.
+ * @param final_img:        Holds the final processed image.
+ * @param new_size:         The size the final image should take if `use_new_size` is true.
+ * @param use_new_size:     If True, the final image is resized to the target size, `new_size`.
+ * @param display:          If True, displays the transformed images. Supported on desktop, not Android.
+ * @return
+ */
 int sudoku::detectSudokuPuzzle(cv::Mat &original_image, cv::Mat &final_img, std::tuple<int, int> new_size, bool use_new_size /* false */, bool display /* false */) {
     return _generalDetectSudokuPuzzle(original_image, final_img, new_size, use_new_size, display);
 }
 
+/**
+ * @author  Jorge Chavez
+ * @brief   Resizes an image to the target size with cubic interpolation for better quality.
+ * @param original_image:   Original image to resize
+ * @param final_img:        Holds the final resized image.
+ * @param target_width:     The target width to resize to.
+ * @param target_height:    The target height to resize to.
+ * @return
+ */
 int _resize_image_high_quality(const cv::Mat &original_image, cv::Mat &final_img, int target_width=3400, int target_height=2500) {
     // get the dimensions of the original image
     int img_width = original_image.cols;
@@ -44,13 +80,13 @@ int _resize_image_high_quality(const cv::Mat &original_image, cv::Mat &final_img
     return 0;
 }
 
-/* Jorge Chavez
- * Description: Given a vector of 4 points, reorder them to be in the order: top left, top right,
- *              bottom right, bottom left.
- * Inputs:
- *      original_pts -- a vector of the original 4 pixel coordinates
- * Returns:
- *      reorder_pts -- a vector of the points in the desired order
+/**
+ * @author  Jorge Chavez
+ * @brief   Given a vector of 4 points, reorder them to be in the order: top left, top right,
+ *          bottom right, bottom left.
+ * @param original_pts:     A vector of 4 pixel coordinates.
+ * @param new_order_pts:    Will holds the final pixel coordinates in the desired order.
+ * @return
  */
 int _reorder_points(const vector<Point> &original_pts, vector<Point> &new_order_pts) {
 
@@ -109,6 +145,16 @@ int _reorder_points(const vector<Point> &original_pts, vector<Point> &new_order_
     return 0;
 }
 
+/**
+ * @author  Jorge Chavez
+ * @brief   The main sudoku image processing pipeline.
+ * @param original_image:   CV image to process.
+ * @param final_img:        Holds the final processed image.
+ * @param new_size:         The size the final image should take if `use_new_size` is true.
+ * @param use_new_size:     If True, the final image is resized to the target size, `new_size`.
+ * @param display:          If True, displays the transformed images. Supported on desktop, not Android.
+ * @return
+ */
 int _generalDetectSudokuPuzzle(cv::Mat &original_image, cv::Mat &final_img, std::tuple<int, int> new_size, bool use_new_size /* false */, bool display /* false */) {
     Mat colored_image, o_gray_image, gray_image; // original image, original gray image, resized gray image
 
