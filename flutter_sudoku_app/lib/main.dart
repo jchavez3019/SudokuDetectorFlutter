@@ -251,18 +251,14 @@ class DisplayPreviewImage extends StatelessWidget {
                     label: const Text("Retry")),
                 ElevatedButton.icon(
                     onPressed: () {
-                      // the user has confirmed to proceed with the processed
-                      // image, let's partition it and run inference on each
-                      // cell
-                      cvState.runInference();
-
                       // proceed to the next page where we display
                       // the predicted labels
                       Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (BuildContext context) =>
                                 DisplayInferredSudokuPuzzle(),
-                          ));
+                          )
+                      );
                     },
                     icon: const Icon(Icons.check_circle),
                     label: const Text("Proceed")),
@@ -316,6 +312,18 @@ class _DisplayInferredSudokuPuzzleState
   bool _show_labels = true; // when true, overlays the 9x9 grid of images with their labels
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // the user has confirmed to proceed with the processed
+    // image, let's partition it and run inference on each
+    // cell
+    final cvState = Provider.of<ComputerVisionState>(context);
+    if (!cvState.loadedPredictions) {
+      cvState.runInference();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
 
     // get the provider and listen for changes
@@ -346,14 +354,13 @@ class _DisplayInferredSudokuPuzzleState
     // reaching this point means that inference was successfull and we can
     // unpack the partitioned cells, initial predictions, and our copy
     // of the predictions
-    final List<Tuple2<XFile, int>> cachedPredictions = cvState.cachedPredictions!;
+    List<Tuple2<XFile, int>> cachedPredictions = cvState.cachedPredictions!;
     List<int> _modified_labels = cvState.modifiedPredictions!;
     int _num_edited = cvState.num_edited;
     double _accuracy = cvState.accuracy;
 
-    //
-    final List<XFile> image_cells = cachedPredictions.map((e) => e.item1).toList();
-    final labels = _modified_labels;
+    List<XFile> image_cells = cachedPredictions.map((e) => e.item1).toList();
+    List<int> labels = _modified_labels;
 
     return Scaffold(
       appBar: AppBar(
@@ -380,8 +387,8 @@ class _DisplayInferredSudokuPuzzleState
               ),
               itemCount: image_cells.length,
               itemBuilder: (context, index) {
-                final image = image_cells[index];
-                final label = labels[index];
+                XFile image = image_cells[index];
+                int label = labels[index];
 
                 return GestureDetector(
                   onTap: () async {
@@ -428,7 +435,10 @@ class _DisplayInferredSudokuPuzzleState
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      Image.file(File(image.path), fit: BoxFit.cover),
+                      Image.file(
+                          File(image.path),
+                          fit: BoxFit.cover,
+                      ),
                       if (_show_labels)
                         Positioned(
                           bottom: 10,

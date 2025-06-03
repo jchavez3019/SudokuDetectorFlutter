@@ -47,6 +47,8 @@ class ComputerVisionState extends ChangeNotifier {
     modifiedPredictions = null;
     errorRunningInference = false;
     inferenceErrorMsg = null;
+    num_edited = 0;
+    accuracy = 0;
     getWarpedImage();
     notifyListeners();
   }
@@ -76,6 +78,7 @@ class ComputerVisionState extends ChangeNotifier {
       cachedPredictions = ret;
       modifiedPredictions = ret.map((e) => e.item2).toList();
       loadedPredictions = true;
+      accuracy = 100.0;
       notifyListeners();
     }).catchError((error) {
       loadedPredictions = true;
@@ -92,8 +95,6 @@ class ComputerVisionState extends ChangeNotifier {
     var new_num_editted = 0;
     var new_num_correct = 0;
     for (int i = 0; i < 81; i++) {
-      // if (index != i && cachedPredictions[i].item2 != modifiedPredictions![i] ||
-      //     (index == i && cachedPredictions[i].item2 != val)) {
       if (cachedPredictions![i].item2 != modifiedPredictions![i]) {
         // count the number of modified labels that do not match the
         // originally predicted labels

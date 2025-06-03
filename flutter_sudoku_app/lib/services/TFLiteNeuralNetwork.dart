@@ -151,7 +151,7 @@ class TFLiteNeuralNetwork {
     }
 
     // convert all the images to XFiles
-    List<XFile> xfile_partitions = await imagesToXFiles(image_partitions);
+    List<XFile> xfile_partitions = await imagesToXFiles(path.basenameWithoutExtension(imageFile.name), image_partitions);
 
     // pair all the XFiles with their data in bytes
     List<Tuple2<XFile, List<List<List<double>>>>> partitions = List.generate(81,
@@ -191,7 +191,7 @@ class TFLiteNeuralNetwork {
   ///
   /// **Returns**:
   /// - List of images in XFile format.
-  Future<List<XFile>> imagesToXFiles(List<img.Image> images) async {
+  Future<List<XFile>> imagesToXFiles(String prefix, List<img.Image> images) async {
     List<XFile> xfileImages = [];
 
     final tempDir = await getTemporaryDirectory();
@@ -200,8 +200,10 @@ class TFLiteNeuralNetwork {
       // Encode image to PNG format (or use encodeJpg if preferred)
       final imageBytes = img.encodePng(images[i]);
 
-      // Create a unique file name
-      final filePath = path.join(tempDir.path, 'image_$i.png');
+      // We use a prefix so that we can cache the partitioned results
+      // for a chosen image
+      String file_name = '${prefix}_image_$i.png';
+      final filePath = path.join(tempDir.path, file_name);
 
       // Write bytes to file
       final file = File(filePath);
@@ -210,6 +212,7 @@ class TFLiteNeuralNetwork {
       // Wrap in XFile
       xfileImages.add(XFile(file.path));
     }
+    log("Cell filename: ${prefix}_image_i.png");
 
     return xfileImages;
   }
@@ -235,7 +238,9 @@ class TFLiteNeuralNetwork {
     final resizedImage = img.copyResize(image, width: width, height: height);
 
     final directory = await getTemporaryDirectory();
-    final resizedImagePath = '${directory.path}/resized_image.png';
+    String file_name = '${path.basenameWithoutExtension(xfile.name)}_resized_image.png';
+    final resizedImagePath = '${directory.path}/$file_name';
+    log("Resized image file name: $file_name");
 
     final resizedImageFile =
         await File(resizedImagePath).writeAsBytes(img.encodePng(resizedImage));
