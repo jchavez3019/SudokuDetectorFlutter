@@ -1,3 +1,5 @@
+/// This file is not used. We can potentially remove this file.
+///
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -12,6 +14,8 @@ class SudokuDetector {
     init();
   }
 
+  /// Description:  Initializes the SudokuDetector class. This
+  ///
   init() async {
     /* Read the marker template from the assets folder, note it is read in png
     format which is what our c++ init detector code expects */

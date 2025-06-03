@@ -11,7 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
 import 'package:image/image.dart' as img;
 
-class TFLiteInterpreterState extends ChangeNotifier {
+class TFLiteNeuralNetwork {
 
   // the path the the .tflite model
   // final String _pathNumberModel = "assets/NumberModel_v0.tflite";

@@ -6,8 +6,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_sudoku_app/services/NativeOpenCVState.dart';
-import 'package:flutter_sudoku_app/services/TFLiteInterpreterState.dart';
+import 'package:flutter_sudoku_app/services/ComputerVisionState.dart';
+import 'package:flutter_sudoku_app/services/TFLiteNeuralNetwork.dart';
 import 'package:image/image.dart' as img;
 import 'package:flutter_sudoku_app/services/loading.dart';
 import 'package:flutter_sudoku_app/theme.dart';
@@ -38,17 +38,24 @@ class MyApp extends StatelessWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: appTheme,
-      home: MyHomePage(title: 'Flutter Demo Home Page'),
+    // We enable the  ComputerVisionState provider
+    // so that we can keep track of the current image,
+    // processed image, predictions, etc. It also gives us
+    // access to computer vision methods such as our backend C++ code
+    // as well as access to our trained NN for running inference.
+    return ChangeNotifierProvider<ComputerVisionState>(
+        create: (context) => ComputerVisionState(),
+        child: MaterialApp(
+          title: 'Flutter Demo',
+          theme: appTheme,
+          home: MyHomePage(title: 'Flutter Demo Home Page'),
+        ),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
   final String title;
-  bool navigateFurther = false;
 
   MyHomePage({super.key, required this.title});
 
@@ -57,20 +64,18 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  bool get navigateFurther => widget.navigateFurther;
-  set navigateFurther(bool newValue) {
-    setState(() {
-      widget.navigateFurther = newValue;
-    });
-  }
 
   OverlayEntry? entry;
   XFile? chosenGalleryImage;
 
-  late File selectedImage;
 
   @override
   Widget build(BuildContext context) {
+
+    // disable listen since we don't want to rebuild this widget whenever
+    // notifyListeners is invoked
+    ComputerVisionState cvState = Provider.of<ComputerVisionState>(context, listen: false);
+
     /* Jorge Chavez
     Description: This generates an overlay on the screen which provides
     the user with the option to upload an image or take a picture with their
@@ -85,7 +90,7 @@ class _MyHomePageState extends State<MyHomePage> {
               entry?.dispose();
               entry = null;
             },
-          ),
+          ), // removes the overlay if the screen outside is touched
           Center(
             child: Container(
               decoration: BoxDecoration(
@@ -102,6 +107,8 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
                 borderRadius: BorderRadius.circular(10.0),
               ),
+              // we ensure the width is 3/8 of the width and 1/5 of the height
+              // of the screen
               width: MediaQuery.of(context).size.width * (3 / 8),
               height: MediaQuery.of(context).size.height / 5,
               child: Padding(
@@ -115,17 +122,14 @@ class _MyHomePageState extends State<MyHomePage> {
                       label: const Text('Upload'),
                       onPressed: () {
                         getImage(false).then((XFile galleryImg) {
+
+                          // record that this is the new image we are working with
+                          cvState.updateImage(galleryImg, false);
+
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (BuildContext context) =>
-                                  ChangeNotifierProvider<NativeOpencvState>(
-                                create: (_) => NativeOpencvState(),
-                                child: DisplayPreviewImage(
-                                  displayImage: galleryImg,
-                                  isUpload: true,
-                                ),
-                              ),
-                              // DisplayGalleryImage(displayImage: galleryImg),
+                              builder: (_) =>
+                              DisplayPreviewImage(),
                             ),
                           );
                           entry?.remove();
@@ -138,16 +142,15 @@ class _MyHomePageState extends State<MyHomePage> {
                       icon: const Icon(Icons.photo_camera),
                       label: const Text("Capture"),
                       onPressed: () {
-                        getImage(false).then((XFile galleryImg) {
-                          Navigator.push(
-                            context,
+                        getImage(true).then((XFile galleryImg) {
+
+                          // record that this is the image we are working with
+                          cvState.updateImage(galleryImg, true);
+
+                          Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) =>
-                                  // DisplayGalleryImage(displayImage: galleryImg),
-                                  DisplayPreviewImage(
-                                displayImage: galleryImg,
-                                isUpload: true,
-                              ),
+                              DisplayPreviewImage(),
                             ),
                           );
                           entry?.remove();
@@ -196,110 +199,98 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 }
 
-class DisplayPreviewImage extends StatefulWidget {
+class DisplayPreviewImage extends StatelessWidget {
   /*
   This class displays a preview image of a warped version of the user's selected
   photo. They can then choose to proceed if the warped image looks correct
   or they can reattempt to upload an image. 
   */
-  XFile displayImage;
-  final bool isUpload;
 
-  DisplayPreviewImage(
-      {super.key, required this.displayImage, required this.isUpload});
-
-  @override
-  State<DisplayPreviewImage> createState() => _DisplayPreviewImageState();
-}
-
-class _DisplayPreviewImageState extends State<DisplayPreviewImage> {
-  /* getters */
-  XFile get displayImage => widget.displayImage;
-  bool get isUpload => widget.isUpload;
-
-  /* setters */
-  set displayImage(XFile newImage) {
-    setState(() {
-      widget.displayImage = newImage;
-    });
-  }
+  DisplayPreviewImage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    NativeOpencvState nativeOpenCV = Provider.of<NativeOpencvState>(context);
 
-    return FutureBuilder<XFile>(
-        future: nativeOpenCV.getWarpedImage(displayImage),
-        builder: (context, snapshot) {
-          /* the snapshot has not arrived or there was an error */
-          if (!snapshot.hasData || snapshot.hasError) {
-            return const Loader();
-          } else if (snapshot.hasError) {
-            return ErrorWidget(Text(
-              "Error getting the warped image",
+    // disable listen since we don't want to rebuild this widget whenever
+    // notifyListeners is invoked
+    ComputerVisionState cvState = Provider.of<ComputerVisionState>(context, listen: false);
+    final bool isUpload = cvState.isImageUploaded!;
+
+    // we only care about when the warpedImage gets updated in the provider
+    final warpedImage = context.select<ComputerVisionState, XFile?>(
+          (state) => state.warpedImage,
+    );
+
+    if (warpedImage == null) {
+      return const Loader();
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Preview Page'),
+        backgroundColor: Colors.deepPurple,
+      ),
+      body: Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Image.file(File(warpedImage.path),
+              fit: BoxFit.cover, width: 250),
+          const SizedBox(height: 24),
+          Text(warpedImage.name),
+          Padding(
+            padding: const EdgeInsets.only(top: 20.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton.icon(
+                    onPressed: () {
+                      getImage(isUpload).then((XFile newDisplayImg) {
+                        cvState.updateImage(newDisplayImg, isUpload);
+                      });
+                    },
+                    icon: const Icon(Icons.cancel),
+                    label: const Text("Retry")),
+                ElevatedButton.icon(
+                    onPressed: () {
+                      // the user has confirmed to proceed with the processed
+                      // image, let's partition it and run inference on each
+                      // cell
+                      cvState.runInference();
+
+                      // proceed to the next page where we display
+                      // the predicted labels
+                      Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (BuildContext context) =>
+                                DisplayInferredSudokuPuzzle(),
+                          ));
+                    },
+                    icon: const Icon(Icons.check_circle),
+                    label: const Text("Proceed")),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Text(
+              "If the Sudoku Puzzle doesn't look like it was correctly extracted, you can try to upload/capture it again. Otherwise proceed and we'll get to solving!",
               style: Theme.of(context).textTheme.bodyMedium,
-            ));
-          } else {
-            // we have recieved the warpedImage successfully
-
-            XFile warpedImage = snapshot.data!;
-
-            return Scaffold(
-              appBar: AppBar(
-                title: const Text('Preview Page'),
-                backgroundColor: Colors.deepPurple,
-              ),
-              body: Center(
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  // Image.file(File(displayImage.path), fit: BoxFit.cover, width: 250),
-                  Image.file(File(warpedImage.path),
-                      fit: BoxFit.cover, width: 250),
-                  const SizedBox(height: 24),
-                  Text(warpedImage.name),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 20.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        ElevatedButton.icon(
-                            onPressed: () {
-                              getImage(!isUpload).then((XFile newDisplayImg) {
-                                displayImage = newDisplayImg;
-                              });
-                            },
-                            icon: const Icon(Icons.cancel),
-                            label: const Text("Retry")),
-                        ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.of(context).push(MaterialPageRoute(
-                                builder: (BuildContext context) =>
-                                    ChangeNotifierProvider<
-                                            TFLiteInterpreterState>(
-                                        create: (_) => TFLiteInterpreterState(),
-                                        child: DisplayInferredSudokuPuzzle(
-                                            warpedImage: warpedImage)),
-                              ));
-                            },
-                            icon: const Icon(Icons.check_circle),
-                            label: const Text("Proceed")),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Text(
-                      "If the Sudoku Puzzle doesn't look like it was correctly extracted, you can try to upload/capture it again. Otherwise proceed and we'll get to solving!",
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ),
-                ]),
-              ),
-            );
-          }
-        });
+            ),
+          ),
+        ]),
+      ),
+    );
   }
 }
 
+/// Description:  Returns an image either from the user's gallery or a live
+///               picture using their camera.
+/// **Paramaters**:
+///
+/// - `useCamera`: flag set when the live camera is to be used, else use the gallery
+///
+/// **Returns**:
+///
+/// - xfilePick: The chosen image in XFile format
 Future<XFile> getImage(bool useCamera) async {
   final pickedFile = await ImagePicker().pickImage(
       source: useCamera ? ImageSource.camera : ImageSource.gallery,
@@ -312,13 +303,7 @@ Future<XFile> getImage(bool useCamera) async {
 }
 
 class DisplayInferredSudokuPuzzle extends StatefulWidget {
-  /* 
-  This class takes the previously warped image and infers what digit is in 
-  each cell. 
-  */
-  XFile warpedImage;
-
-  DisplayInferredSudokuPuzzle({super.key, required this.warpedImage});
+  DisplayInferredSudokuPuzzle({super.key});
 
   @override
   State<DisplayInferredSudokuPuzzle> createState() =>
@@ -329,69 +314,46 @@ class _DisplayInferredSudokuPuzzleState
     extends State<DisplayInferredSudokuPuzzle> {
   /* private variables */
   bool _show_labels = true; // when true, overlays the 9x9 grid of images with their labels
-  List<Tuple2<XFile, int>>? _cached_predictions; // will hold the initial partitioned cells and their predictions
-  List<int>? _modified_labels; // holds the initial predictions but can be modified by the user (e.g., maybe some were incorrect)
-  bool _is_loading = true; // false once the initial predictions have been made
-  String? _error; // non-empty if an error encountered when running predictions
-
-  int _num_correct = 0; // number of label predictions that are correct
-  int _num_edited = 0; // number of labels that have been editted by the user
-  double _accuracy = 0; // accuracy of the model thus far
-
-  /* getters */
-  XFile get warpedImage => widget.warpedImage;
-  /* setters */
-  set warpedImage(XFile newImage) {
-    setState(() {});
-    widget.warpedImage = newImage;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPredictions();
-  }
-
-  Future<void> _loadPredictions() async {
-    try {
-      // partition the warped image and run inference on each cell
-      final tflis = Provider.of<TFLiteInterpreterState>(context, listen: false);
-      final result = await tflis.getPartitionedPredictions(warpedImage);
-      setState(() {
-        _cached_predictions = result;
-        _modified_labels = result.map((e) => e.item2).toList();
-        _is_loading = false;
-        _num_correct = 81;
-        _accuracy = 100.0;
-      });
-    } catch (e) {
-      // there was an error trying to run inference
-      setState(() {
-        _error = "Error getting the inferred image.";
-        _is_loading = false;
-      });
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    if (_is_loading) {
+
+    // get the provider and listen for changes
+    final cvState = Provider.of<ComputerVisionState>(context);
+
+    // flag set to true once the model has made its final predictions
+    bool loadedPredictions = cvState.loadedPredictions;
+
+    // the predictions have not been made yet, return the loader
+    if (!loadedPredictions) {
       return const Scaffold(body: Loader());
     }
 
-    if (_error != null || _modified_labels == null) {
+    // predictions have been made, we can get the initial results
+    String? errorMsg = cvState.inferenceErrorMsg;
+
+    if (errorMsg != null) {
       return Scaffold(
         body: Center(
           child: Text(
-            _error ?? "Unknown error",
+            errorMsg,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ),
       );
     }
 
-    final image_cells = _cached_predictions!.map((e) => e.item1).toList();
-    final labels = _modified_labels!;
+    // reaching this point means that inference was successfull and we can
+    // unpack the partitioned cells, initial predictions, and our copy
+    // of the predictions
+    final List<Tuple2<XFile, int>> cachedPredictions = cvState.cachedPredictions!;
+    List<int> _modified_labels = cvState.modifiedPredictions!;
+    int _num_edited = cvState.num_edited;
+    double _accuracy = cvState.accuracy;
+
+    //
+    final List<XFile> image_cells = cachedPredictions.map((e) => e.item1).toList();
+    final labels = _modified_labels;
 
     return Scaffold(
       appBar: AppBar(
@@ -424,6 +386,8 @@ class _DisplayInferredSudokuPuzzleState
                 return GestureDetector(
                   onTap: () async {
                     final controller = TextEditingController(text: '$label');
+
+                    // give the user a number pad to update the label of a cell
                     int? newLabel = await showDialog<int>(
                       context: context,
                       builder: (context) => AlertDialog(
@@ -452,30 +416,15 @@ class _DisplayInferredSudokuPuzzleState
                     );
 
                     if (newLabel != null) {
-                      var new_num_editted = 0;
-                      var new_num_correct = 0;
-                      for (int i = 0; i < 81; i++) {
-                        if (index != i && _cached_predictions![i].item2 != _modified_labels![i] ||
-                            (index == i && _cached_predictions![i].item2 != newLabel)) {
-                          // count the number of modified labels that do not match the
-                          // originally predicted labels
-                          new_num_editted++;
-                        }
-                        else {
-                          // if the modified label matches the original prediction,
-                          // we assume that this means the prediction was correct
-                          new_num_correct++;
-                        }
-                      }
-                      var new_accuracy = (new_num_correct / 81.0) * 100.0;
-                      setState(() {
-                        _modified_labels![index] = newLabel;
-                        _num_edited = new_num_editted;
-                        _num_correct = new_num_correct;
-                        _accuracy = new_accuracy;
-                      });
+                      // The user has updated a label, e.g., its prediction
+                      // was incorrect. Update the predictions in the provider,
+                      // this will then trigger a widget rebuild.
+                      cvState.updateModifiedPredictions(index, newLabel);
                     }
                   },
+
+                  // This stack will show each cell's image. If _show_labels is
+                  // true, we will overlay the images with their predicted labels.
                   child: Stack(
                     alignment: Alignment.center,
                     children: [

@@ -76,6 +76,13 @@ class NativeOpencv {
     return _version().toDartString();
   }
 
+  /// Description:  Leftover code from the Aruco detector repo. 
+  ///               Could potentially remove this.
+  /// **Parameters**: 
+  /// 
+  /// - `markerPngBytes`: Allocates memory for the a marker. Used for the Aruco
+  ///                     detector.
+  /// - `bits`: `         Specific to the Aruco detector.
   void initDetector(Uint8List markerPngBytes, int bits) {
     var totalSize = markerPngBytes.lengthInBytes;
     var imgBuffer = malloc.allocate<Uint8>(totalSize);
@@ -93,6 +100,16 @@ class NativeOpencv {
     malloc.free(imgBuffer);
   }
 
+  /// Description:  Given a decoded image, use OpenCV C++ library to rotate
+  ///               the image. 
+  /// 
+  /// **Parameters**: 
+  /// 
+  /// - `originalImage`: The decoded image to rotate.
+  /// 
+  /// **Returns**:
+  /// 
+  /// - The rotated image, also decoded.
   Uint8List rotateImage(Uint8List originalImage) {
     var totalSize = originalImage.lengthInBytes;
     var imgBuffer = malloc.allocate<Uint8>(totalSize);
@@ -148,6 +165,8 @@ class NativeOpencv {
     }
   }
 
+  /// Description:  Remnants from the Aruco detector. This is not related to the
+  ///               Sudoku detector. Could potentially remove.
   Float32List detect(int width, int height, int rotation, Uint8List yBuffer,
       Uint8List? uBuffer, Uint8List? vBuffer) {
     var ySize = yBuffer.lengthInBytes;
@@ -178,6 +197,11 @@ class NativeOpencv {
     return res.asTypedList(count);
   }
 
+  /// Description:  Simple test function to see that we can correctly call
+  ///               C++ code and send the string to our Dart code.
+  /// **Returns**: 
+  /// 
+  /// - String with "hello world".
   String hello() {
     return _hello().toDartString();
   }
