@@ -36,7 +36,7 @@ int isBitSet(int num, int idx, List<int> bitset) {
 ///
 /// **Returns**:
 /// - True if values can be placed in cells [k, 80] while maintaining feasibility.
-bool _backtracking(int k, List<List<String>> board, List<int> rbm,
+bool _backtracking(int k, List<List<int>> board, List<int> rbm,
     List<int> cbm, List<int> gbm, List<bool> is_fixed) {
   if (k >= 81) {
     // base case, we are out of range on the board
@@ -58,7 +58,7 @@ bool _backtracking(int k, List<List<String>> board, List<int> rbm,
       gbm[g] |= 0x0001 << c;
       if (_backtracking(k+1, board, rbm, cbm, gbm, is_fixed)) {
         // setting this element does not make subsequent entries infeasible
-        board[i][j] = "${c+1}";
+        board[i][j] = c+1;
         return true;
       } else {
         // this element creates an infeasible sudoku board, reset our decision
@@ -79,7 +79,7 @@ bool _backtracking(int k, List<List<String>> board, List<int> rbm,
 ///
 /// **Returns**:
 /// - True if the board contains a solution, False otherwise.
-bool solveSudoku(List<List<String>> board) {
+bool solveSudoku(List<List<int>> board) {
   List<int> rbm = List.generate(9, (_) => 0);
   List<int> cbm = List.generate(9, (_) => 0);
   List<int> gbm = List.generate(9, (_) => 0);
@@ -87,14 +87,13 @@ bool solveSudoku(List<List<String>> board) {
 
   // fill in the bit masks and is_fixed vector for fixed elements on the board
   int i, j, g, c;
-  String char;
   for (int k = 0; k < 81; k++) {
     i = k ~/9;
     j = k % 9;
-    char = board[i][j];
-    if (char != '.') {
+    c = board[i][j];
+    if (c != 0) {
       g = gbmIdx(i, j);
-      c = int.parse(char) - 1;
+      c--;
       is_fixed[k] = true;
       rbm[i] |= 0x0001 << c;
       cbm[j] |= 0x0001 << c;
