@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 var appTheme = ThemeData(
     fontFamily: GoogleFonts.nunito().fontFamily,
     brightness: Brightness.dark,
+    scaffoldBackgroundColor: Colors.transparent, // Allows our animated background to show
     textTheme: const TextTheme(
       bodyLarge: TextStyle(
         fontSize: 18,

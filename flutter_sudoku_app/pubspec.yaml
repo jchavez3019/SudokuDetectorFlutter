@@ -51,6 +51,7 @@ dependencies:
 
   # pytorch_mobile: ^0.2.2
   # flutter_pytorch: ^1.0.1
+  flutter_svg: ^2.1.0
   tflite_flutter: ^0.11.0
   tuple: ^2.0.2
 

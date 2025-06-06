@@ -1,27 +1,14 @@
-import 'dart:developer';
-import 'dart:typed_data';
+import 'package:flutter_sudoku_app/background_animation.dart';
 import 'package:flutter_sudoku_app/sudoku_solver.dart';
+import 'package:flutter_svg/svg.dart';
 import 'package:tuple/tuple.dart';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:camera/camera.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_sudoku_app/services/ComputerVisionState.dart';
-import 'package:flutter_sudoku_app/services/TFLiteNeuralNetwork.dart';
-import 'package:image/image.dart' as img;
 import 'package:flutter_sudoku_app/services/loading.dart';
 import 'package:flutter_sudoku_app/theme.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_sudoku_app/camera_state.dart';
-import 'package:native_opencv/native_opencv.dart';
-import 'package:path_provider/path_provider.dart';
 import 'dart:io';
-
-// import 'package:pytorch_mobile/pytorch_mobile.dart';
-// import 'package:pytorch_mobile/model.dart';
-// import 'package:flutter_pytorch/flutter_pytorch.dart';
-// import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
 
 import 'package:provider/provider.dart';
 
@@ -29,6 +16,7 @@ void main() {
   // Ensure that plugin services are initialized so that `availableCameras()`
   // can be called before `runApp()`
   WidgetsFlutterBinding.ensureInitialized();
+  // debugPaintSizeEnabled = false;
 
   runApp(MyApp());
 }
@@ -45,13 +33,52 @@ class MyApp extends StatelessWidget {
     // access to computer vision methods such as our backend C++ code
     // as well as access to our trained NN for running inference.
     return ChangeNotifierProvider<ComputerVisionState>(
-        create: (context) => ComputerVisionState(),
-        child: MaterialApp(
-          title: 'Flutter Demo',
-          theme: appTheme,
-          home: MyHomePage(title: 'Flutter Demo Home Page'),
-        ),
-    );
+          create: (context) => ComputerVisionState(),
+          child: MaterialApp(
+            title: 'Flutter Demo',
+            theme: appTheme,
+            home: MyHomePage(title: 'Flutter Demo Home Page'),
+            builder: (context, child) {
+              return Stack(
+                children: [
+                  Positioned.fill(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final svgOriginalWidth = 1600.0;
+                        final svgOriginalHeight = 800.0;
+
+                        final screenWidth = constraints.maxWidth;
+                        final screenHeight = constraints.maxHeight;
+
+                        final aspectRatio = svgOriginalHeight / svgOriginalWidth;
+                        final scaledHeight = screenWidth * aspectRatio;
+                        final repeatCount = (screenHeight / scaledHeight).ceil();
+
+                        return ListView.builder(
+                          physics: const NeverScrollableScrollPhysics(),
+                          padding: EdgeInsets.zero,
+                          itemCount: repeatCount,
+                          itemBuilder: (context, index) {
+                            return SizedBox(
+                              width: screenWidth,
+                              height: scaledHeight,
+                              child: SvgPicture.asset(
+                                'assets/icons/confetti-doodles.svg',
+                                fit: BoxFit.fitWidth,
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  const Positioned.fill(child: BackgroundAnimation()),
+                  if (child != null) child,
+                ],
+              );
+            },
+          ),
+      );
   }
 }
 
