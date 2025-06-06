@@ -5,21 +5,31 @@ class Loader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox(
-      width: 250,
-      height: 250,
-      child: CircularProgressIndicator(),
+    final size = MediaQuery.of(context).size;
+    final loaderSize = size.width * 0.25;
+
+    return SizedBox(
+      width: loaderSize,
+      height: loaderSize,
+      child: const CircularProgressIndicator(
+        strokeWidth: 6.0, // optional: make it more visible
+      ),
     );
   }
 }
+
 
 class LoadingScreen extends StatelessWidget {
   const LoadingScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
+    return Scaffold(
+        appBar: AppBar(
+        title: const Text('Loading...'),
+      backgroundColor: Colors.deepPurple,
+        ),
+      body: const Center(
         child: Loader(),
       ),
     );

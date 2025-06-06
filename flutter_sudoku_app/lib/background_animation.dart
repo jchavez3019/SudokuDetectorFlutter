@@ -39,7 +39,7 @@ class _BackgroundAnimationState extends State<BackgroundAnimation>
   Widget _digit() {
     final digit = (_random.nextInt(9) + 1).toString();
     final size = _random.nextDouble() * 40 + 20;
-    final color = Colors.deepPurpleAccent.withValues(alpha: 0.1 + _random.nextDouble() * 0.1);
+    final color = Colors.amber.withValues(alpha: 0.1 + _random.nextDouble() * 0.1);
 
     return Positioned(
       top: _random.nextDouble() * MediaQuery.of(context).size.height,

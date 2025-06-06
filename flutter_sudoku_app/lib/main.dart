@@ -4,6 +4,7 @@ import 'package:flutter_svg/svg.dart';
 import 'package:tuple/tuple.dart';
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_sudoku_app/services/ComputerVisionState.dart';
 import 'package:flutter_sudoku_app/services/loading.dart';
 import 'package:flutter_sudoku_app/theme.dart';
@@ -44,13 +45,13 @@ class MyApp extends StatelessWidget {
                   Positioned.fill(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        final svgOriginalWidth = 1600.0;
-                        final svgOriginalHeight = 800.0;
+                        const svgOriginalWidth = 1600.0;
+                        const svgOriginalHeight = 800.0;
 
                         final screenWidth = constraints.maxWidth;
                         final screenHeight = constraints.maxHeight;
 
-                        final aspectRatio = svgOriginalHeight / svgOriginalWidth;
+                        const aspectRatio = svgOriginalHeight / svgOriginalWidth;
                         final scaledHeight = screenWidth * aspectRatio;
                         final repeatCount = (screenHeight / scaledHeight).ceil();
 
@@ -227,16 +228,52 @@ class _MyHomePageState extends State<MyHomePage> {
           )
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text("Welcome to the Sudoku Solver",
-                style: Theme.of(context).textTheme.bodyLarge),
-          ],
+      body: // Dark background with subtle gradient
+      Column(
+        children: [
+          const SizedBox(height: 60),
+          ShaderMask(
+          shaderCallback: (bounds) => const LinearGradient(
+            colors: [
+              Color(0xFF201E50),
+              Color(0xFF347FC4),
+              Color(0xFFF9CFF2),
+              Color(0xFFD138BF),
+            ],
+            stops: [0.0, 0.3, 0.7, 1.0],
+            tileMode: TileMode.mirror,
+          ).createShader(bounds),
+          child: Text(
+            'Sudoku Solver',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.pressStart2p(
+              textStyle: TextStyle(
+                fontSize: 48, // Very large size, adjust as needed
+                fontWeight: FontWeight.bold,
+                letterSpacing: 4,
+                shadows: [
+                  Shadow(
+                    offset: const Offset(3, 3),
+                    color: Colors.black.withValues(alpha: 0.8),
+                    blurRadius: 4,
+                  ),
+                  Shadow(
+                    offset: const Offset(-2, -2),
+                    color: Colors.black.withValues(alpha :0.6),
+                    blurRadius: 3,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
+          Text(
+            'An app by Jorge Chavez ʕ⁠ ⁠º⁠ ⁠ᴥ⁠ ⁠º⁠ʔ',
+            style: GoogleFonts.notoSans(
+              textStyle: const TextStyle(fontSize: 16),
+            ),
+          ),
+        ]
       ),
       floatingActionButton: FloatingActionButton(
         child: const Icon(Icons.add),
@@ -271,7 +308,7 @@ class DisplayPreviewImage extends StatelessWidget {
     );
 
     if (warpedImage == null) {
-      return const Loader();
+      return const LoadingScreen();
     }
 
     return Scaffold(
@@ -397,9 +434,9 @@ class _DisplayInferredSudokuPuzzleState
     // flag set to true once the model has made its final predictions
     bool loadedPredictions = cvState.loadedPredictions;
 
-    // the predictions have not been made yet, return the loader
+    // the predictions have not been made yet, return the LoadingScreen
     if (!loadedPredictions) {
-      return const Scaffold(body: Loader());
+      return const Scaffold(body: LoadingScreen());
     }
 
     // predictions have been made, we can get the initial results
@@ -430,6 +467,7 @@ class _DisplayInferredSudokuPuzzleState
     return Scaffold(
       appBar: AppBar(
         title: const Text('Predictions'),
+        backgroundColor: Colors.deepPurple,
         actions: [
           IconButton(
               icon: Icon(_show_labels ? Icons.visibility_off : Icons.visibility),
@@ -631,46 +669,49 @@ class SolvedSudokuBoard extends StatelessWidget {
       body: Center(
         child: Column(
           children: [
-            AspectRatio(
-              aspectRatio: 1,
-              child: Container(
-                margin: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(width: 4),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.deepPurple,
-                      blurRadius: 6,
-                      spreadRadius: 4,
-                    ),
-                  ],
-                ),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    // use the maximum width of the layout and divide by 9; this will
-                    // be the width of each cell
-                    final cellSize = constraints.maxWidth / 9;
-                    return Table(
-                      // we will fix the width of each column entry to be the size
-                      // calculated above
-                      defaultColumnWidth: FixedColumnWidth(cellSize),
-                      children: List.generate(9, (row) {
-                        return TableRow(
-                          children: List.generate(9, (col) {
-                            return SudokuCell(
-                              row: row,
-                              col: col,
-                              size: cellSize,
-                              cell_value: modifiedCopy[row][col],
-                              is_fixed: cvState.modifiedPredictions![9*row + col] != 0,
-                              has_solution: boardHasSolution
-                            );
-                          }),
-                        );
-                      }),
-                    );
-                  },
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: Container(
+                  margin: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(width: 4),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.deepPurple,
+                        blurRadius: 6,
+                        spreadRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // use the maximum width of the layout and divide by 9; this will
+                      // be the width of each cell
+                      final cellSize = constraints.maxWidth / 9;
+                      return Table(
+                        // we will fix the width of each column entry to be the size
+                        // calculated above
+                        defaultColumnWidth: FixedColumnWidth(cellSize),
+                        children: List.generate(9, (row) {
+                          return TableRow(
+                            children: List.generate(9, (col) {
+                              return SudokuCell(
+                                row: row,
+                                col: col,
+                                size: cellSize,
+                                cell_value: modifiedCopy[row][col],
+                                is_fixed: cvState.modifiedPredictions![9*row + col] != 0,
+                                has_solution: boardHasSolution
+                              );
+                            }),
+                          );
+                        }),
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
