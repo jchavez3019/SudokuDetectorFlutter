@@ -2,22 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 var appTheme = ThemeData(
-    fontFamily: GoogleFonts.nunito().fontFamily,
     brightness: Brightness.dark,
     scaffoldBackgroundColor: Colors.transparent, // Allows our animated background to show
-    textTheme: const TextTheme(
-      bodyLarge: TextStyle(
+    textTheme: TextTheme(
+      bodyLarge: const TextStyle(
         fontSize: 18,
       ),
-      bodyMedium: TextStyle(
+      bodyMedium: GoogleFonts.notoSans().copyWith(
+        fontSize: 16,
+        color: Colors.grey[300],
+        backgroundColor: Colors.black.withValues(alpha: 0.3),
+        fontWeight: FontWeight.bold,
+      ),
+      labelMedium: GoogleFonts.openSans().copyWith(
         fontSize: 16,
       ),
-      labelLarge: TextStyle(
+      labelLarge: GoogleFonts.openSans().copyWith(
+        fontSize: 18,
         letterSpacing: 1.5,
         fontWeight: FontWeight.bold,
       ),
-      displayLarge: TextStyle(fontWeight: FontWeight.bold),
-      titleMedium: TextStyle(
+      displayLarge: const TextStyle(fontWeight: FontWeight.bold),
+      titleMedium: const TextStyle(
         color: Colors.grey,
       ),
     ));

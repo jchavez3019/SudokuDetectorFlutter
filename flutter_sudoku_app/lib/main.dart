@@ -34,52 +34,52 @@ class MyApp extends StatelessWidget {
     // access to computer vision methods such as our backend C++ code
     // as well as access to our trained NN for running inference.
     return ChangeNotifierProvider<ComputerVisionState>(
-          create: (context) => ComputerVisionState(),
-          child: MaterialApp(
-            title: 'Flutter Demo',
-            theme: appTheme,
-            home: MyHomePage(title: 'Flutter Demo Home Page'),
-            builder: (context, child) {
-              return Stack(
-                children: [
-                  Positioned.fill(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        const svgOriginalWidth = 1600.0;
-                        const svgOriginalHeight = 800.0;
+      create: (context) => ComputerVisionState(),
+      child: MaterialApp(
+        title: 'Flutter Demo',
+        theme: appTheme,
+        home: MyHomePage(title: 'Flutter Demo Home Page'),
+        builder: (context, child) {
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    const svgOriginalWidth = 1600.0;
+                    const svgOriginalHeight = 800.0;
 
-                        final screenWidth = constraints.maxWidth;
-                        final screenHeight = constraints.maxHeight;
+                    final screenWidth = constraints.maxWidth;
+                    final screenHeight = constraints.maxHeight;
 
-                        const aspectRatio = svgOriginalHeight / svgOriginalWidth;
-                        final scaledHeight = screenWidth * aspectRatio;
-                        final repeatCount = (screenHeight / scaledHeight).ceil();
+                    const aspectRatio = svgOriginalHeight / svgOriginalWidth;
+                    final scaledHeight = screenWidth * aspectRatio;
+                    final repeatCount = (screenHeight / scaledHeight).ceil();
 
-                        return ListView.builder(
-                          physics: const NeverScrollableScrollPhysics(),
-                          padding: EdgeInsets.zero,
-                          itemCount: repeatCount,
-                          itemBuilder: (context, index) {
-                            return SizedBox(
-                              width: screenWidth,
-                              height: scaledHeight,
-                              child: SvgPicture.asset(
-                                'assets/icons/confetti-doodles.svg',
-                                fit: BoxFit.fitWidth,
-                              ),
-                            );
-                          },
+                    return ListView.builder(
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      itemCount: repeatCount,
+                      itemBuilder: (context, index) {
+                        return SizedBox(
+                          width: screenWidth,
+                          height: scaledHeight,
+                          child: SvgPicture.asset(
+                            'assets/icons/confetti-doodles.svg',
+                            fit: BoxFit.fitWidth,
+                          ),
                         );
                       },
-                    ),
-                  ),
-                  const Positioned.fill(child: BackgroundAnimation()),
-                  if (child != null) child,
-                ],
-              );
-            },
-          ),
-      );
+                    );
+                  },
+                ),
+              ),
+              const Positioned.fill(child: BackgroundAnimation()),
+              if (child != null) child,
+            ],
+          );
+        },
+      ),
+    );
   }
 }
 
@@ -136,8 +136,8 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               // we ensure the width is 3/8 of the width and 1/5 of the height
               // of the screen
-              width: MediaQuery.of(context).size.width * (3 / 8),
-              height: MediaQuery.of(context).size.height / 5,
+              width: MediaQuery.of(context).size.width * (1/2),
+              height: MediaQuery.of(context).size.height / 6,
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: Column(
@@ -156,7 +156,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) =>
-                              DisplayPreviewImage(),
+                                  DisplayPreviewImage(),
                             ),
                           );
                           entry?.remove();
@@ -177,7 +177,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) =>
-                              DisplayPreviewImage(),
+                                  DisplayPreviewImage(),
                             ),
                           );
                           entry?.remove();
@@ -212,8 +212,15 @@ class _MyHomePageState extends State<MyHomePage> {
                     context: context,
                     builder: (BuildContext context) {
                       return AlertDialog(
-                          title: const Text('About', textAlign: TextAlign.center,),
-                          content: const Text("This app is capable of recognizing Sudoku puzzles from images and solving them. To try this out, click on the 'plus' button on the bottom right and either upload or capture an image. Enjoy!"),
+                          title: Text(
+                            'About',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                          content: Text(
+                            "This app is capable of recognizing Sudoku puzzles from images and solving them. To try this out, click on the 'plus' button on the bottom right and either upload or capture an image. Enjoy!",
+                            style: Theme.of(context).textTheme.labelMedium,
+                          ),
                           actions: [
                             TextButton(
                               child: const Text('close'),
@@ -230,50 +237,49 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       body: // Dark background with subtle gradient
       Column(
-        children: [
-          const SizedBox(height: 60),
-          ShaderMask(
-          shaderCallback: (bounds) => const LinearGradient(
-            colors: [
-              Color(0xFF201E50),
-              Color(0xFF347FC4),
-              Color(0xFFF9CFF2),
-              Color(0xFFD138BF),
-            ],
-            stops: [0.0, 0.3, 0.7, 1.0],
-            tileMode: TileMode.mirror,
-          ).createShader(bounds),
-          child: Text(
-            'Sudoku Solver',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.pressStart2p(
-              textStyle: TextStyle(
-                fontSize: 48, // Very large size, adjust as needed
-                fontWeight: FontWeight.bold,
-                letterSpacing: 4,
-                shadows: [
-                  Shadow(
-                    offset: const Offset(3, 3),
-                    color: Colors.black.withValues(alpha: 0.8),
-                    blurRadius: 4,
-                  ),
-                  Shadow(
-                    offset: const Offset(-2, -2),
-                    color: Colors.black.withValues(alpha :0.6),
-                    blurRadius: 3,
-                  ),
+          children: [
+            const SizedBox(height: 60),
+            ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [
+                  Color(0xFF201E50),
+                  Color(0xFF347FC4),
+                  Color(0xFFF9CFF2),
+                  Color(0xFFD138BF),
                 ],
+                stops: [0.0, 0.3, 0.7, 1.0],
+                tileMode: TileMode.mirror,
+              ).createShader(bounds),
+              child: Text(
+                'Sudoku Solver',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.pressStart2p(
+                  textStyle: TextStyle(
+                    fontSize: 48, // Very large size, adjust as needed
+                    fontWeight: FontWeight.bold,
+                    backgroundColor: Colors.transparent,
+                    letterSpacing: 4,
+                    shadows: [
+                      Shadow(
+                        offset: const Offset(3, 3),
+                        color: Colors.black.withValues(alpha: 0.8),
+                        blurRadius: 4,
+                      ),
+                      Shadow(
+                        offset: const Offset(-2, -2),
+                        color: Colors.black.withValues(alpha :0.6),
+                        blurRadius: 3,
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-          Text(
-            'An app by Jorge Chavez ʕ⁠ ⁠º⁠ ⁠ᴥ⁠ ⁠º⁠ʔ',
-            style: GoogleFonts.notoSans(
-              textStyle: const TextStyle(fontSize: 16),
+            Text(
+                'An app by Jorge Chavez ʕ⁠ ⁠º⁠ ⁠ᴥ⁠ ⁠º⁠ʔ',
+                style: Theme.of(context).textTheme.bodyMedium
             ),
-          ),
-        ]
+          ]
       ),
       floatingActionButton: FloatingActionButton(
         child: const Icon(Icons.add),
@@ -323,8 +329,15 @@ class DisplayPreviewImage extends StatelessWidget {
                     context: context,
                     builder: (BuildContext context) {
                       return AlertDialog(
-                          title: const Text('Instructions', textAlign: TextAlign.center,),
-                          content: const Text('If the Sudoku board is clearly visible and centered, proceed to the inference step. Otherwise, you may reattempt uploading a new image.'),
+                          title: Text(
+                            'Instructions',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                          content: Text(
+                            'If the Sudoku board is clearly visible and centered, proceed to the inference step. Otherwise, you may reattempt uploading a new image.',
+                            style: Theme.of(context).textTheme.labelMedium,
+                          ),
                           actions: [
                             TextButton(
                               child: const Text('close'),
@@ -344,7 +357,10 @@ class DisplayPreviewImage extends StatelessWidget {
           Image.file(File(warpedImage.path),
               fit: BoxFit.cover, width: 250),
           const SizedBox(height: 24),
-          Text(warpedImage.name),
+          Text(
+            " ${warpedImage.name} ",
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
           Padding(
             padding: const EdgeInsets.only(top: 20.0),
             child: Row(
@@ -478,142 +494,166 @@ class _DisplayInferredSudokuPuzzleState
               }
           ),
           IconButton(
-            icon: const Icon(Icons.info_outline),
-            onPressed: () {
-              showDialog(
-                  context: context,
-                  builder: (BuildContext context) {
-                    return AlertDialog(
-                      title: const Text('Instructions', textAlign: TextAlign.center,),
-                      content: const Text('Tap on any cell to edit its label. Use the toggle in the top-right to show/hide labels. \n\nA label of 0 means the cell is empty.'),
-                      actions: [
-                        TextButton(
-                          child: const Text('close'),
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                          },
-                        )
-                      ]
-                    );
-                  });
-            }
+              icon: const Icon(Icons.info_outline),
+              onPressed: () {
+                showDialog(
+                    context: context,
+                    builder: (BuildContext context) {
+                      return AlertDialog(
+                          title: Text(
+                            'Instructions',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                          content: Text(
+                            'Tap on any cell to edit its label. Use the toggle in the top-right to show/hide labels. \n\nA label of 0 means the cell is empty.',
+                            style: Theme.of(context).textTheme.labelMedium,
+                          ),
+                          actions: [
+                            TextButton(
+                              child: const Text('close'),
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                              },
+                            )
+                          ]
+                      );
+                    });
+              }
           )
         ],
       ),
       body: Column(
         mainAxisAlignment: MainAxisAlignment.start,
+        // crossAxisAlignment: CrossAxisAlignment,
         children: [
           Flexible( // let's GridView only the necessary amount of vertical space
-            child: Center(
-          child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: GridView.builder(
-            shrinkWrap: true, // calculates the height needed based on the number of children
-            physics: const NeverScrollableScrollPhysics(), // grid should not be draggable
-            // padding: EdgeInsets.zero,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 9,
-              crossAxisSpacing: 2.0,
-              mainAxisSpacing: 2.0,
-            ),
-            itemCount: image_cells.length,
-            itemBuilder: (context, index) {
-              XFile image = image_cells[index];
-              int label = labels[index];
-
-              return GestureDetector(
-                onTap: () async {
-                  final controller = TextEditingController(text: '$label');
-
-                  // give the user a number pad to update the label of a cell
-                  int? newLabel = await showDialog<int>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text("Edit Label"),
-                      content: TextField(
-                        controller: controller,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: "New label"),
+              child: Center(
+                child: Container(
+                  decoration: const BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.deepPurple,
+                        blurRadius: 6,
+                        spreadRadius: 4,
                       ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Text("Cancel"),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            final parsed = int.tryParse(controller.text);
-                            if (parsed != null) {
-                              Navigator.of(context).pop(parsed);
+                    ],
+                  ),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 400),
+                    child: GridView.builder(
+                      padding: const EdgeInsets.all(0.0),
+                      shrinkWrap: true, // calculates the height needed based on the number of children
+                      physics: const NeverScrollableScrollPhysics(), // grid should not be draggable
+                      // padding: EdgeInsets.zero,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 9,
+                        crossAxisSpacing: 2.0,
+                        mainAxisSpacing: 2.0,
+                      ),
+                      itemCount: image_cells.length,
+                      itemBuilder: (context, index) {
+                        XFile image = image_cells[index];
+                        int label = labels[index];
+
+                        return GestureDetector(
+                          onTap: () async {
+                            final controller = TextEditingController(text: '$label');
+
+                            // give the user a number pad to update the label of a cell
+                            int? newLabel = await showDialog<int>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text("Edit Label"),
+                                content: TextField(
+                                  controller: controller,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(labelText: "New label"),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.of(context).pop(),
+                                    child: const Text("Cancel"),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      final parsed = int.tryParse(controller.text);
+                                      if (parsed != null) {
+                                        Navigator.of(context).pop(parsed);
+                                      }
+                                    },
+                                    child: const Text("OK"),
+                                  ),
+                                ],
+                              ),
+                            );
+
+                            if (newLabel != null) {
+                              // The user has updated a label, e.g., its prediction
+                              // was incorrect. Update the predictions in the provider,
+                              // this will then trigger a widget rebuild.
+                              cvState.updateModifiedPredictions(index, newLabel);
                             }
                           },
-                          child: const Text("OK"),
-                        ),
-                      ],
-                    ),
-                  );
 
-                  if (newLabel != null) {
-                    // The user has updated a label, e.g., its prediction
-                    // was incorrect. Update the predictions in the provider,
-                    // this will then trigger a widget rebuild.
-                    cvState.updateModifiedPredictions(index, newLabel);
-                  }
-                },
-
-                // This stack will show each cell's image. If _show_labels is
-                // true, we will overlay the images with their predicted labels.
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Image.file(
-                      File(image.path),
-                      fit: BoxFit.cover,
-                    ),
-                    if (_show_labels)
-                      Positioned(
-                        bottom: 10,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                          color: Colors.black54,
-                          child: Text(
-                            "$label",
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          // This stack will show each cell's image. If _show_labels is
+                          // true, we will overlay the images with their predicted labels.
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Image.file(
+                                File(image.path),
+                                fit: BoxFit.cover,
+                              ),
+                              if (_show_labels)
+                                Positioned(
+                                  bottom: 10,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                    color: Colors.black54,
+                                    child: Text(
+                                      "$label",
+                                      style: const TextStyle(
+                                        backgroundColor: Colors.transparent,
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
-                        ),
-                      ),
-                  ],
+                        );
+                      },
+                    ),),
                 ),
-              );
-            },
-          ),),
-      )
+              )
 
 
           ),
           // confirmation to solve the puzzle
-          TextButton(
-              onPressed: () {
-                // proceed to the next page where we solve
-                // the Sudoku board
-                Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (BuildContext context) =>
-                          SolvedSudokuBoard(),
-                    )
-                );
-              },
-              child: const Text('Solve!')),
+          ElevatedButton.icon(
+            onPressed: () {
+              // proceed to the next page where we solve
+              // the Sudoku board
+              Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (BuildContext context) =>
+                    const SolvedSudokuBoard(),
+                  )
+              );
+            },
+            icon: const Icon(Icons.edit),
+            label: const Text("Solve Puzzle"),
+          ),
+          const Padding(padding: EdgeInsets.all(10.0)),
           // display the accuracy of the inference
           Center(
             child: Padding(
-                padding: const EdgeInsets.only(bottom: 20.0),
-                child: Text(
-                "Edited: $_num_edited / 81 | Accuracy: ${_accuracy.toStringAsFixed(1)}%",
+              padding: const EdgeInsets.only(bottom: 20.0),
+              child: Text(
+                " Edited: $_num_edited / 81 | Accuracy: ${_accuracy.toStringAsFixed(1)}% ",
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
@@ -640,7 +680,7 @@ class SolvedSudokuBoard extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-          title: const Text('Solution'),
+        title: const Text('Solution'),
         backgroundColor: Colors.deepPurple,
         actions: [
           IconButton(
@@ -650,8 +690,15 @@ class SolvedSudokuBoard extends StatelessWidget {
                     context: context,
                     builder: (BuildContext context) {
                       return AlertDialog(
-                          title: const Text('About', textAlign: TextAlign.center,),
-                          content: const Text("When a solution exists, the missing values are highlighted in blue! Fixed values are in black."),
+                          title: Text(
+                            'About',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                          content: Text(
+                            " When a solution exists, the missing values are highlighted in blue! Fixed values are in black. ",
+                            style: Theme.of(context).textTheme.labelMedium,
+                          ),
                           actions: [
                             TextButton(
                               child: const Text('close'),
@@ -699,12 +746,12 @@ class SolvedSudokuBoard extends StatelessWidget {
                           return TableRow(
                             children: List.generate(9, (col) {
                               return SudokuCell(
-                                row: row,
-                                col: col,
-                                size: cellSize,
-                                cell_value: modifiedCopy[row][col],
-                                is_fixed: cvState.modifiedPredictions![9*row + col] != 0,
-                                has_solution: boardHasSolution
+                                  row: row,
+                                  col: col,
+                                  size: cellSize,
+                                  cell_value: modifiedCopy[row][col],
+                                  is_fixed: cvState.modifiedPredictions![9*row + col] != 0,
+                                  has_solution: boardHasSolution
                               );
                             }),
                           );
@@ -716,15 +763,13 @@ class SolvedSudokuBoard extends StatelessWidget {
               ),
             ),
             Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Text(
-                    boardHasSolution ? "A solution was found!" : "Uh-oh, no solution exists :( \n\nDouble check the original board was put in correctly.",
-                    style: TextStyle(
-                      color: boardHasSolution ? Colors.white : Colors.orangeAccent,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+              padding: const EdgeInsets.all(20.0),
+              child: Text(
+                boardHasSolution ? " A solution was found!" : "Uh-oh, no solution exists :( \n\nDouble check the original board was put in correctly. ",
+                style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                  color: boardHasSolution ? Colors.white : Colors.orangeAccent,
                 ),
+              ),
             ),
           ],
         ),
@@ -790,14 +835,15 @@ class SudokuCell extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: Center(
-            child: Text(
-              cell_str,
-              style: TextStyle(
-                color: cell_color,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            )
+              child: Text(
+                cell_str,
+                style: TextStyle(
+                  backgroundColor: Colors.transparent,
+                  color: cell_color,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              )
           ),
         ),
       ),
