@@ -23,25 +23,6 @@ to_numpy = lambda x : x.detach().cpu().numpy() if isinstance(x, Tensor) else x
 ModuleTypes = Union[nn.modules.conv.Conv2d, nn.modules.batchnorm.BatchNorm2d, nn.modules.activation.ReLU,
     nn.modules.flatten.Flatten, nn.modules.linear.Linear, nn.modules.pooling.MaxPool2d, nn.modules.pooling.AvgPool2d,]
 
-    # parser.add_argument("--model_path", type=str,
-    #                     default="./models/",
-    #                     help="Directory to save the model")
-    # parser.add_argument("--model_name", type=str,
-    #                     default="NumberModel_v0",
-    #                     help="Name of the model.")
-    # parser.add_argument("--save_model", action="store_true",
-    #                     help="Set flag if the model should be saved.")
-    # parser.add_argument("--load_model", type=str,
-    #                     help="Instead of saving a new model, load an existing model.")
-    # parser.add_argument("--epochs", type=int, default=20)
-    # parser.add_argument("--lrate", type=float, default=0.01)
-    # parser.add_argument("--batch_size", type=int, default=50)
-    # parser.add_argument("--device", type=torch.device, default=torch.device('cuda'),
-    #                     help="Device to use (e.g., 'cpu' or 'cuda'; default is 'cuda').")
-    # parser.add_argument("--verbose_architecture", action="store_true",
-    #                     help="Set flag if the model architecture should be printed. This helps get a high-level view "
-    #                          "of the modules that comprise our custom residual network.")
-
 def parse_layer(layer_name: str, layer_type: str, layer: ModuleTypes, residual_args: Optional[dict] = None) -> dict:
     """
 
@@ -449,15 +430,12 @@ def fit(
 
         print(f"Forward inference with test samples: \n{output}")
         print(f"output.dtype: {output.dtype}")
-        # traced_script_module = torch.jit.trace(NetObject, samples)
-        # optimized_traced_model = optimize_for_mobile(traced_script_module)
-        # optimized_traced_model._save_for_lite_interpreter(model_path + model_name + "_mobile.pt")
 
     return losses, NetObject
 
 @hydra.main(config_path="./config", version_base=None)
 def main(cfg: Config):
-    # print the configuration settings
+    # print the yaml configuration settings
     print("Configuration:")
     print(OmegaConf.to_yaml(cfg))
     print("Architecture:")
@@ -506,34 +484,5 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = True
     torch.use_deterministic_algorithms(True)
 
-    # ## BEGIN PROGRAM ARGUMENTS ##
-    # parser = argparse.ArgumentParser()
-    # # Build arguments
-    # parser.add_argument("--model_path", type=str,
-    #                     default="./models/",
-    #                     help="Directory to save the model")
-    # parser.add_argument("--model_name", type=str,
-    #                     default="NumberModel_v0",
-    #                     help="Name of the model.")
-    # parser.add_argument("--save_model", action="store_true",
-    #                     help="Set flag if the model should be saved.")
-    # parser.add_argument("--load_model", type=str,
-    #                     help="Instead of saving a new model, load an existing model.")
-    # parser.add_argument("--epochs", type=int, default=20)
-    # parser.add_argument("--lrate", type=float, default=0.01)
-    # parser.add_argument("--batch_size", type=int, default=50)
-    # parser.add_argument("--device", type=torch.device, default=torch.device('cuda'),
-    #                     help="Device to use (e.g., 'cpu' or 'cuda'; default is 'cuda').")
-    # parser.add_argument("--verbose_architecture", action="store_true",
-    #                     help="Set flag if the model architecture should be printed. This helps get a high-level view "
-    #                          "of the modules that comprise our custom residual network.")
-    # # Parse arguments
-    # args = parser.parse_args()
-    # args_dict = vars(args)
-    # ## END PROGRAM ARGUMENTS
-
-    # global device
-    # device = args_dict.get("device")
-
-    ## RUN MAIN PROGRAM
+    # run the main program
     main()
