@@ -14,3 +14,4 @@ hardware:
   device: cuda
 misc:
   verbose_architecture: false
+  display_loss: false

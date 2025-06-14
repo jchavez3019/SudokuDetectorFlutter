@@ -20,6 +20,8 @@ import numpy as np
 import os, argparse, torch
 from torch import Tensor, nn
 from typing import *
+import hydra
+from config.config_schema import Config, Architecture
 
 print("TensorFlow version:", tf.__version__)
 print("GPU available:", tf.config.list_physical_devices('GPU'))
@@ -239,10 +241,12 @@ class NumberModel(tf.keras.Model):
         x = self.global_pool(x)
         return self.fc(x)
 
-
-def main():
-    pth_path = args_dict.get("torch_model_path")
-    keras_model_name = args_dict.get("model_name")
+@hydra.main(config_path="./config", version_base=None)
+def main(cfg: Config):
+    # pth_path = args_dict.get("torch_model_path")
+    pth_path = cfg.save_parameters.model_path
+    # keras_model_name = args_dict.get("model_name")
+    keras_model_name = cfg.save_parameters.model_name
     pth_dict = torch.load(pth_path, map_location='cpu')
     model = NumberModel(pth_dict["custom_state_dict"])
     model.build(input_shape=(None, 50, 50, 1)) # (batch, height, width, channels)
@@ -287,17 +291,17 @@ def main():
     print("TFLite output shape:", output.shape)
 
 if __name__ == "__main__":
-    ## BEGIN PROGRAM ARGUMENTS ##
-    parser = argparse.ArgumentParser()
-    # Build arguments
-    parser.add_argument("torch_model_path", type=str,
-                        help="Path of the PyTorch model to initialize from.")
-    parser.add_argument("model_name", type=str,
-                        help="Name of the Keras model to save as.")
-    # Parse arguments
-    args = parser.parse_args()
-    args_dict = vars(args)
-    ## END PROGRAM ARGUMENTS
-
-    ## RUN MAIN PROGRAM
+    # ## BEGIN PROGRAM ARGUMENTS ##
+    # parser = argparse.ArgumentParser()
+    # # Build arguments
+    # parser.add_argument("torch_model_path", type=str,
+    #                     help="Path of the PyTorch model to initialize from.")
+    # parser.add_argument("model_name", type=str,
+    #                     help="Name of the Keras model to save as.")
+    # # Parse arguments
+    # args = parser.parse_args()
+    # args_dict = vars(args)
+    # ## END PROGRAM ARGUMENTS
+    #
+    # ## RUN MAIN PROGRAM
     main()

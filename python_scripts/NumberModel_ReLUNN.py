@@ -6,7 +6,6 @@ from torch.utils.data.dataset import Subset
 from torch import Tensor, Size
 from tqdm import tqdm
 from typing import Union, Tuple
-from torch.utils.mobile_optimizer import optimize_for_mobile
 
 from python_helper_functions import get_sudoku_dataset
 

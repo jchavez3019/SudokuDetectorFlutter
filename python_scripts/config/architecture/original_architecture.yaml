@@ -1,3 +1,4 @@
+image_dimensions: [1, 50, 50] # channel, width, height
 # layers is a list of dictionaries
 layers:
   - type: Conv2d

@@ -1,3 +1,4 @@
+image_dimensions: [1, 50, 50] # channel, width, height
 layers:
   - type: Conv2d
     params:
@@ -46,7 +47,7 @@ layers:
       blocks: 2
       stride: 2
 
-  - type: AdaptiveAvgPool2d
+  - type: AvgPool2d
     params:
       output_size: [1, 1]
 

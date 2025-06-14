@@ -21,7 +21,8 @@ class Hardware:
 @dataclass
 class Misc:
     verbose_architecture: bool = field(default=False, metadata={"help": "Set flag if the model architecture should be printed. This helps get a high-level view "
-    #                          "of the modules that comprise our custom residual network."})
+                             "of the modules that comprise our custom residual network."})
+    display_loss: bool = field(default=False, metadata={"help": "Displays plots of the loss after training."})
 
 @dataclass
 class Layer:
@@ -30,6 +31,7 @@ class Layer:
 
 @dataclass
 class Architecture:
+    image_dimensions: List[int] = field(default_factory=list, metadata={"help": "Image input dimensions."})
     layers: List[Layer] = field(default_factory=list, metadata={"help": "List of sequential layers of the residual network."})
 
 @dataclass
