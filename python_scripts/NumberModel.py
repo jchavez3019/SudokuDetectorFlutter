@@ -4,15 +4,16 @@ This is a custom implementation of a Residual network. This script can also trai
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Subset
 from torch import Tensor, Size
 from tqdm import tqdm
 from typing import *
-# from torch.utils.mobile_optimizer import optimize_for_mobile
-import argparse
 from collections import OrderedDict
 import numpy as np
+import hydra
+from config.config_schema import Config, Architecture
 
 from python_helper_functions import get_sudoku_dataset
 
@@ -21,6 +22,25 @@ to_numpy = lambda x : x.detach().cpu().numpy() if isinstance(x, Tensor) else x
 # these are the explicit types of the layers that are used for the residual network in this script
 ModuleTypes = Union[nn.modules.conv.Conv2d, nn.modules.batchnorm.BatchNorm2d, nn.modules.activation.ReLU,
     nn.modules.flatten.Flatten, nn.modules.linear.Linear, nn.modules.pooling.MaxPool2d, nn.modules.pooling.AvgPool2d,]
+
+    # parser.add_argument("--model_path", type=str,
+    #                     default="./models/",
+    #                     help="Directory to save the model")
+    # parser.add_argument("--model_name", type=str,
+    #                     default="NumberModel_v0",
+    #                     help="Name of the model.")
+    # parser.add_argument("--save_model", action="store_true",
+    #                     help="Set flag if the model should be saved.")
+    # parser.add_argument("--load_model", type=str,
+    #                     help="Instead of saving a new model, load an existing model.")
+    # parser.add_argument("--epochs", type=int, default=20)
+    # parser.add_argument("--lrate", type=float, default=0.01)
+    # parser.add_argument("--batch_size", type=int, default=50)
+    # parser.add_argument("--device", type=torch.device, default=torch.device('cuda'),
+    #                     help="Device to use (e.g., 'cpu' or 'cuda'; default is 'cuda').")
+    # parser.add_argument("--verbose_architecture", action="store_true",
+    #                     help="Set flag if the model architecture should be printed. This helps get a high-level view "
+    #                          "of the modules that comprise our custom residual network.")
 
 def parse_layer(layer_name: str, layer_type: str, layer: ModuleTypes, residual_args: Optional[dict] = None) -> dict:
     """
@@ -174,7 +194,9 @@ class NumberModel(nn.Module):
             lrate: float,
             loss_fn,
             in_size,
-            out_size):
+            out_size,
+            cfg: Architecture,
+    ):
         """
         Initializes the Neural Network model
         @param lrate: Learning rate for the model
@@ -184,30 +206,83 @@ class NumberModel(nn.Module):
         """
         super(NumberModel, self).__init__()
 
-        self.in_channels = 64
+        self.cfg = cfg
 
-        # the arguments for initialize the residual layers, useful to save for later
-        self.residual_args = {
-            "5_ResidualLayer": {"out_channels": 64, "blocks": 2, "stride": 1},
-            "6_ResidualLayer": {"out_channels": 128, "blocks": 2, "stride": 2},
-            "7_ResidualLayer": {"out_channels": 256, "blocks": 2, "stride": 2},
-            "8_ResidualLayer": {"out_channels": 512, "blocks": 2, "stride": 2},
-        }
+        self.in_channels = None
         model_layers = []
-        model_layers.extend([
-            ("1_Conv2d", nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)),
-            ("2_BatchNorm2d", nn.BatchNorm2d(64)), # element-wise normalization along each channel
-            ("3_ReLU", nn.ReLU(inplace=True)),
-            ("4_MaxPool2d", nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=False)),
-            ("5_ResidualLayer", self._make_layer(BasicBlock, **self.residual_args["5_ResidualLayer"])),
-            ("6_ResidualLayer", self._make_layer(BasicBlock, **self.residual_args["6_ResidualLayer"])),
-            ("7_ResidualLayer", self._make_layer(BasicBlock, **self.residual_args["7_ResidualLayer"])),
-            ("8_ResidualLayer", self._make_layer(BasicBlock, **self.residual_args["8_ResidualLayer"])),
-            ("9_AvgPool2d", nn.AdaptiveAvgPool2d((1, 1))), # average each convolution image to be a single element
-            ("10_Flatten", nn.Flatten()),
-            ("11_Linear", nn.Linear(512, out_size)),
-        ])
+        self.residual_args = {}
+
+        for i, layer_cfg in enumerate(cfg.layers):
+            layer_type = layer_cfg.type
+            layer_params = layer_cfg.params
+            layer_name = f"{i:02d}_{layer_type}"
+
+            if layer_type == "Conv2d":
+                self.in_channels = layer_params["out_channels"]
+                layer = nn.Conv2d(**layer_params)
+
+            elif layer_type == "BatchNorm2d":
+                layer = nn.BatchNorm2d(**layer_params)
+
+            elif layer_type == "ReLU":
+                layer = nn.ReLU(inplace=layer_params.get("inplace", True))
+
+            elif layer_type == "MaxPool2d":
+                layer = nn.MaxPool2d(**layer_params)
+
+            elif layer_type == "ResidualLayer":
+                layer = self._make_layer(
+                    BasicBlock,
+                    out_channels=layer_params["out_channels"],
+                    blocks=layer_params["blocks"],
+                    stride=layer_params["stride"]
+                )
+                self.residual_args[layer_name] = {
+                    "out_channels": layer_params["out_channels"],
+                    "blocks": layer_params["blocks"],
+                    "stride": layer_params["stride"]
+                }
+
+            elif layer_type == "AvgPool2d":
+                layer = nn.AdaptiveAvgPool2d(tuple(layer_params["output_size"]))
+
+            elif layer_type == "Flatten":
+                layer = nn.Flatten()
+
+            elif layer_type == "Linear":
+                layer = nn.Linear(layer_params["in_features"], layer_params["out_features"])
+
+            else:
+                raise ValueError(f"Unknown layer type: {layer_type}")
+
+            model_layers.append((layer_name, layer))
+
         self.model = nn.Sequential(OrderedDict(model_layers))
+
+        # self.in_channels = 64
+        #
+        # # the arguments for initialize the residual layers, useful to save for later
+        # self.residual_args = {
+        #     "5_ResidualLayer": {"out_channels": 64, "blocks": 2, "stride": 1},
+        #     "6_ResidualLayer": {"out_channels": 128, "blocks": 2, "stride": 2},
+        #     "7_ResidualLayer": {"out_channels": 256, "blocks": 2, "stride": 2},
+        #     "8_ResidualLayer": {"out_channels": 512, "blocks": 2, "stride": 2},
+        # }
+        # model_layers = []
+        # model_layers.extend([
+        #     ("1_Conv2d", nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)),
+        #     ("2_BatchNorm2d", nn.BatchNorm2d(64)), # element-wise normalization along each channel
+        #     ("3_ReLU", nn.ReLU(inplace=True)),
+        #     ("4_MaxPool2d", nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=False)),
+        #     ("5_ResidualLayer", self._make_layer(BasicBlock, **self.residual_args["5_ResidualLayer"])),
+        #     ("6_ResidualLayer", self._make_layer(BasicBlock, **self.residual_args["6_ResidualLayer"])),
+        #     ("7_ResidualLayer", self._make_layer(BasicBlock, **self.residual_args["7_ResidualLayer"])),
+        #     ("8_ResidualLayer", self._make_layer(BasicBlock, **self.residual_args["8_ResidualLayer"])),
+        #     ("9_AvgPool2d", nn.AdaptiveAvgPool2d((1, 1))), # average each convolution image to be a single element
+        #     ("10_Flatten", nn.Flatten()),
+        #     ("11_Linear", nn.Linear(512, out_size)),
+        # ])
+        # self.model = nn.Sequential(OrderedDict(model_layers))
 
         self.loss_fn = loss_fn
         self.optimizer = optim.SGD(self.parameters(), lr=lrate, weight_decay=1e-5)
@@ -269,6 +344,7 @@ def fit(
         model_name: str,
         image_dim: Size,
         epochs: int,
+        cfg: Architecture,
         lrate: float = 0.01,
         loss_fn = nn.CrossEntropyLoss(),
         batch_size: int = 50,
@@ -292,7 +368,7 @@ def fit(
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
     # initialize net and send to device
-    NetObject = NumberModel(lrate, loss_fn, image_dim[0], 10).to(device)
+    NetObject = NumberModel(lrate, loss_fn, image_dim[0], 10, cfg).to(device)
 
     losses = []
     epoch_progress_bar = tqdm(range(epochs), desc="Epochs", leave=True)
@@ -379,15 +455,23 @@ def fit(
 
     return losses, NetObject
 
-def main():
-    device = args_dict.get("device")
-    lrate = args_dict.get("lrate")
+@hydra.main(config_path="./config", version_base=None)
+def main(cfg: Config):
+    # print the configuration settings
+    print("Configuration:")
+    print(OmegaConf.to_yaml(cfg))
+    print("Architecture:")
+    print(OmegaConf.to_yaml(cfg.architecture))
+
+    global device
+    device = cfg.hardware.device
+    lrate = cfg.training.lrate
     loss_fn = nn.CrossEntropyLoss()
-    if args_dict.get("load_model") is not None:
-        pth_path = args_dict.get("load_model")
+    if cfg.save_parameters.load_model is not None:
+        pth_path = cfg.save_parameters.load_model
         pth_dict = torch.load(pth_path, map_location=device)
         _, _, single_image_dimension = get_sudoku_dataset(verbose=False)
-        NetObject = NumberModel(lrate, loss_fn, single_image_dimension[0], 10).to(device)
+        NetObject = NumberModel(lrate, loss_fn, single_image_dimension[0], 10, cfg.architecture).to(device)
         NetObject.load_state_dict(pth_dict["state_dict"])
         NetObject.eval()
         test_samples = torch.from_numpy(pth_dict["test_samples"]).to(dtype=torch.float32, device=device)
@@ -401,15 +485,16 @@ def main():
         params = {
             "train_dataset": train_data,
             "test_dataset": test_data,
-            "model_path": args_dict.get("model_path"),
-            "model_name": args_dict.get("model_name"),
+            "model_path": cfg.save_parameters.model_path,
+            "model_name": cfg.save_parameters.model_name,
             "image_dim": single_image_dimension,
-            "epochs": args_dict.get("epochs"),
+            "epochs": cfg.training.epochs,
+            "cfg": cfg.architecture,
             "lrate": lrate,
             "loss_fn": loss_fn,
-            "batch_size": args_dict.get("batch_size"),
-            "save": args_dict.get("save_model"),
-            "verbose_architecture": args_dict.get("verbose_architecture"),
+            "batch_size": cfg.training.batch_size,
+            "save": cfg.save_parameters.save_model,
+            "verbose_architecture": cfg.misc.verbose_architecture,
         }
         losses, NetObject = fit(**params)
 
@@ -421,34 +506,34 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = True
     torch.use_deterministic_algorithms(True)
 
-    ## BEGIN PROGRAM ARGUMENTS ##
-    parser = argparse.ArgumentParser()
-    # Build arguments
-    parser.add_argument("--model_path", type=str,
-                        default="./models/",
-                        help="Directory to save the model")
-    parser.add_argument("--model_name", type=str,
-                        default="NumberModel_v0",
-                        help="Name of the model.")
-    parser.add_argument("--save_model", action="store_true",
-                        help="Set flag if the model should be saved.")
-    parser.add_argument("--load_model", type=str,
-                        help="Instead of saving a new model, load an existing model.")
-    parser.add_argument("--epochs", type=int, default=20)
-    parser.add_argument("--lrate", type=float, default=0.01)
-    parser.add_argument("--batch_size", type=int, default=50)
-    parser.add_argument("--device", type=torch.device, default=torch.device('cuda'),
-                        help="Device to use (e.g., 'cpu' or 'cuda'; default is 'cuda').")
-    parser.add_argument("--verbose_architecture", action="store_true",
-                        help="Set flag if the model architecture should be printed. This helps get a high-level view "
-                             "of the modules that comprise our custom residual network.")
-    # Parse arguments
-    args = parser.parse_args()
-    args_dict = vars(args)
-    ## END PROGRAM ARGUMENTS
+    # ## BEGIN PROGRAM ARGUMENTS ##
+    # parser = argparse.ArgumentParser()
+    # # Build arguments
+    # parser.add_argument("--model_path", type=str,
+    #                     default="./models/",
+    #                     help="Directory to save the model")
+    # parser.add_argument("--model_name", type=str,
+    #                     default="NumberModel_v0",
+    #                     help="Name of the model.")
+    # parser.add_argument("--save_model", action="store_true",
+    #                     help="Set flag if the model should be saved.")
+    # parser.add_argument("--load_model", type=str,
+    #                     help="Instead of saving a new model, load an existing model.")
+    # parser.add_argument("--epochs", type=int, default=20)
+    # parser.add_argument("--lrate", type=float, default=0.01)
+    # parser.add_argument("--batch_size", type=int, default=50)
+    # parser.add_argument("--device", type=torch.device, default=torch.device('cuda'),
+    #                     help="Device to use (e.g., 'cpu' or 'cuda'; default is 'cuda').")
+    # parser.add_argument("--verbose_architecture", action="store_true",
+    #                     help="Set flag if the model architecture should be printed. This helps get a high-level view "
+    #                          "of the modules that comprise our custom residual network.")
+    # # Parse arguments
+    # args = parser.parse_args()
+    # args_dict = vars(args)
+    # ## END PROGRAM ARGUMENTS
 
-    global device
-    device = args_dict.get("device")
+    # global device
+    # device = args_dict.get("device")
 
     ## RUN MAIN PROGRAM
     main()

@@ -1,0 +1,16 @@
+defaults:
+  - architecture: original_architecture
+
+save_parameters:
+  model_path: ./models
+  model_name: TestNumberModelForTFLite
+  save_model: true
+  load_model: null
+training:
+  epochs: 80
+  lrate: 0.001
+  batch_size: 50
+hardware:
+  device: cuda
+misc:
+  verbose_architecture: false
