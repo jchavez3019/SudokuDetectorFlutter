@@ -1,11 +1,13 @@
 defaults:
+  - _self_
   - architecture: original_architecture
 
 save_parameters:
   model_path: ./models
-  model_name: TestNumberModelForTFLite
+  model_name: Original_TestNumberModelForTFLite
   save_model: true
   load_model: null
+  trace_sample: true
 training:
   epochs: 80
   lrate: 0.001

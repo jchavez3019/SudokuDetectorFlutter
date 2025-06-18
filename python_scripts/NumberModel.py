@@ -13,6 +13,7 @@ from typing import *
 from collections import OrderedDict
 import numpy as np
 import hydra
+from pathlib import Path
 
 from config.config_schema import Config, Architecture
 
@@ -36,11 +37,11 @@ class BasicBlock(nn.Module):
 
         # sublayers that compose of our feed-forward net in our block
         layers = [
-            ("1_Conv2d", nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)),
-            ("2_BatchNorm2d", nn.BatchNorm2d(out_channels)),
-            ("3_ReLU", nn.ReLU(inplace=True)),
-            ("4_Conv2d", nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)),
-            ("5_BatchNorm2d", nn.BatchNorm2d(out_channels)),
+            ("00_Conv2d", nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)),
+            ("01_BatchNorm2d", nn.BatchNorm2d(out_channels)),
+            ("02_ReLU", nn.ReLU(inplace=True)),
+            ("03_Conv2d", nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)),
+            ("04_BatchNorm2d", nn.BatchNorm2d(out_channels)),
         ]
         self.ffn = nn.Sequential(OrderedDict(layers))
 
@@ -53,8 +54,8 @@ class BasicBlock(nn.Module):
         self.downsample = None
         if stride != 1 or in_channels != out_channels:
             self.downsample = nn.Sequential(OrderedDict([
-                ("0_Conv2d", nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False)),
-                ("1_BatchNorm2d", nn.BatchNorm2d(out_channels))
+                ("00_Conv2d", nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False)),
+                ("01_BatchNorm2d", nn.BatchNorm2d(out_channels))
             ]))
 
     def forward(self, x):
@@ -146,26 +147,34 @@ class NumberModel(nn.Module):
         :param stride:
         :return:
         """
-        layers = [("1_ResidualBasicBlock", block(self.in_channels, out_channels, stride))]
+        layers = [("00_ResidualBasicBlock", block(self.in_channels, out_channels, stride))]
         self.in_channels = out_channels # update in_channels for the next blocks
         for i in range(1, blocks):
-            layers.append((f"{i+1}_ResidualBasicBlock", block(self.in_channels, out_channels)))
+            layers.append((f"{i:02d}_ResidualBasicBlock", block(self.in_channels, out_channels)))
         return nn.Sequential(OrderedDict(layers))
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: Tensor) -> Tensor:
         """
         Forward pass of the model.
         :param x:   Batch of samples.
         :return:    Batch of inferences.
         """
-        return self.model(x)
-        # TODO: Remove this but can be useful for comparing layer outputs between torch and tf
-        # module_dict = nn.ModuleDict(self.model._modules)
-        # for layer_name, layer_fn in module_dict.items():
-        #     x = layer_fn(x)
-        # return x
+        return self.model(x)        
+        
+    def forward_trace(self, x: Tensor):
+        """
+        Forward pass of the model where each layer's output is recorded.
+        :param x:   Batch of samples.
+        :return:    Batch of inferences and trace of each layer's results.
+        """
+        trace = {}
+        module_dict = nn.ModuleDict(self.model._modules)
+        for layer_name, layer_fn in module_dict.items():
+            x = layer_fn(x)
+            trace[layer_name] = to_numpy(x)
+        return x, trace
 
-    def step(self, x: torch.Tensor, y: torch.Tensor):
+    def step(self, x: Tensor, y: Tensor):
         """
         Returns the loss of a single forward pass.
         :param x:   Batch of input samples.
@@ -229,8 +238,7 @@ class NetParser:
                 print(f"Layer items: {layer}")
 
             layer_params = self.parse_layer(name, layer_type, layer, net.residual_args)
-            if len(layer_params) > 0:
-                model_dict[name] = layer_params
+            model_dict[name] = layer_params
 
         return model_dict
 
@@ -309,14 +317,14 @@ class NetParser:
         num_blocks = _get_num_layers(layer)  # the number of residual blocks in the layer
         # parse the parameters of the residual layer
         residual_params = {
-            "NumberBlocks": residual_args.get("blocks"),  # the number of residual blocks in the layer
-            "OutChannels": residual_args.get("out_channels"),  # the residual layer's number of output channels
-            "Stride": residual_args.get("stride"),
+            "NumberBlocks": residual_args[name]["blocks"],  # the number of residual blocks in the layer
+            "OutChannels": residual_args[name]["out_channels"],  # the residual layer's number of output channels
+            "Stride": residual_args[name]["stride"],
             # the stride of the residual layer's first convolution in the first block
             "ResidualLayerModel": {}
         }
         # this will hold the parameters of each block in the residual layer
-        res_layer_model = residual_params.get("ResidualLayerModel")
+        res_layer_model = residual_params["ResidualLayerModel"]
 
         def _get_parameters(module: nn.modules.container.Sequential) -> dict:
             ret_params = {}
@@ -445,21 +453,27 @@ def save_model(net: NumberModel, cfg: Config, verbose_architecture: bool = False
     # instead of the default network state dictionary. This makes it easier to use this .pth
     # file to initialize a Keras model.
     custom_state_dict = get_explicit_model(net, verbose=True)
+    torch_test_samples = torch.rand(10, *cfg.architecture.image_dimensions).to(dtype=torch.float32, device=device)
     pth_dict = {
         "custom_state_dict": custom_state_dict, # typically you would use NetObject.state_dict()
         "lrate": cfg.training.lrate,
         "loss_fn": None,
         "image_dim": cfg.architecture.image_dimensions,
         "out_size": 10,
-        "test_samples": to_numpy(torch.rand(10, *cfg.architecture.image_dimensions)),
+        "test_samples": to_numpy(torch_test_samples),
     }
+    if cfg.save_parameters.trace_sample:
+        # pass our batch of randomized samples and trace the network's output throughout each layer
+        pth_dict["trace"] = net.forward_trace(torch_test_samples)[1]
     net = net.to(device=device)
     net.eval()
-    samples = torch.from_numpy(pth_dict["test_samples"]).to(dtype=torch.float32, device=device)
-    output = to_numpy(net(samples))
+    output = to_numpy(net(torch_test_samples))
     pth_dict["test_sample_outputs"] = output
     pth_dict["state_dict"] = net.state_dict()
-    torch.save(pth_dict, cfg.save_parameters.model_path + cfg.save_parameters.model_name + ".pth")
+
+    save_path = Path(cfg.save_parameters.model_path) / f"{cfg.save_parameters.model_name}.pth"
+    torch.save(pth_dict, save_path)
+    print(f"Torch model saved to path: {save_path}")
 
     print(f"Forward inference with test samples: \n{output}")
     print(f"output.dtype: {output.dtype}")
@@ -507,11 +521,9 @@ def fit(
 
 @hydra.main(config_path="./config", version_base=None)
 def main(cfg: Config):
-    # print the .yaml configuration settings
+    # print the .yaml configuration settings and architecture
     print("Configuration:")
     print(OmegaConf.to_yaml(cfg))
-    print("Architecture:")
-    print(OmegaConf.to_yaml(cfg.architecture))
 
     global device
     device = cfg.hardware.device
@@ -549,6 +561,8 @@ def main(cfg: Config):
             "batch_size": cfg.training.batch_size,
         }
         losses, net = fit(**params)
+
+        # TODO: At this point, we should display training plots
         
         if cfg.save_parameters.save_model:
             # save the model after training

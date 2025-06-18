@@ -212,8 +212,9 @@ def get_sudoku_dataset(split: float = 0.8, verbose: bool = False) -> Tuple[Subse
     all_images = format_inputs_cells(all_images)
 
     if verbose:
-        print(f"Shape labels: {labels.shape}, dtype: {labels.dtype}")
-        print(f"Shape all_images: {all_images.shape}, dtype: {all_images.dtype}")
+        print("Dataset shapes:")
+        print(f"\tShape labels: {labels.shape}, dtype: {labels.dtype}")
+        print(f"\tShape all_images: {all_images.shape}, dtype: {all_images.dtype}")
 
     dataset = TensorDataset(all_images, labels)
     train_size = int(split * len(labels))

@@ -7,6 +7,7 @@ class SaveParameters:
     model_name: str = field(default="TestNumberModelForTFLite", metadata={"help": "Name of the model."})
     save_model: bool = field(default=True, metadata={"help": "Set flag if the model should be saved."})
     load_model: Optional[str] = field(default=None, metadata={"help": "Instead of saving a new model, load an existing model."})
+    trace_sample: bool = field(default=False, metadata={"help": "Set flag if the sample input should be traced through the model's layers."})
 
 @dataclass
 class Training:
