@@ -52,7 +52,6 @@ class SequentialModel(tf.keras.Model):
             current_output = layer(current_input, training=training) \
                 if hasattr(layer, "training") or callable(getattr(layer, "call", None)) \
                 else layer(current_input)
-            # trace[f"{i:02d}_{layer.__class__.__name__}"] = current_output.numpy()
             trace[layer.name] = current_output.numpy()
             current_input = current_output
 
@@ -231,6 +230,12 @@ class KerasModelBuilder:
         return output_shape
 
 class BasicBlock(tf.keras.Model):
+    """
+    TODO:
+        The trace comparison between the Torch and the Keras model shows that the outputs begin to greatly differ once
+        we enter the residual layers. Double check the BasicBlock implementation here and in the Torch model to see
+        what might be causing this numerical discrepancy.
+    """
     def __init__(self, input_shape: Tuple[int,...], in_channels: int, out_channels: int, block_params: dict):
         """
         Builds a single residual block which a residual layer is composed of.
@@ -346,51 +351,46 @@ class BasicBlock(tf.keras.Model):
         out += identity
         return self.relu(out, training=training)
 
-@hydra.main(config_path="./config", version_base=None)
-def main(cfg: Config):
-    pth_path = Path(cfg.save_parameters.model_path) / f"{cfg.save_parameters.model_name}.pth"
-    print(f"Loading pth dict from path: {pth_path}")
-    pth_dict = torch.load(pth_path, map_location='cpu')
+def compare_traces(torch_trace: Dict[str, np.ndarray],
+                   keras_trace: Dict[str, np.ndarray],
+                   np_atol: float=1e-4):
+    """
+    Compares the outputs of each layer between the Keras model and the Torch model.
+    :param torch_trace: Dictionary containing the outputs of each layer in the Torch model.
+    :param keras_trace: Dictionary containing the outputs of each layer in the Keras model.
+    """
+    print(f"Keys in torch trace: {torch_trace.keys()}")
+    print(f"Keys in keras trace: {keras_trace.keys()}")
+    for key in torch_trace.keys():
+        if key not in keras_trace:
+            print(f"Torch key {key} not in keras.")
+            continue
+        torch_trace_data = torch_trace[key]
+        keras_trace_data = keras_trace[key]
+        print(f"{key}:")
+        print(f"\tTorch shape {torch_trace_data.shape}")
+        print(f"\tKeras shape {keras_trace_data.shape}")
+        if keras_trace_data.ndim == 4:
+            # torch data shape is [batch, channel, width, height]
+            # keras shape is [batch, width, height, channel] -> torch shape
+            keras_trace_data = keras_trace_data.transpose(0, 3, 1, 2)
+        print(f"\tDo the traces match? {np.allclose(torch_trace_data, keras_trace_data, atol=np_atol)}")
 
-    builder = KerasModelBuilder()
-    model = builder.build(pth_dict["custom_state_dict"])
-    model.build(input_shape=(None, 50, 50, 1))  # (batch, height, width, channels)
-
-    # Build the model by calling it once with a dummy input.
-    # Shape (batch, channels, height, width) -> (batch, height, width, channels)
-    test_samples = pth_dict["test_samples"].transpose(0, 2, 3, 1)
-    dummy_input = tf.convert_to_tensor(test_samples)
-    test_sample_outputs = model(dummy_input, training=False)
-
-    print(model.summary(expand_nested=True))
-
-    torch_trace = pth_dict.get("trace")
-    if torch_trace is not None:
-        # compare the trace of the torch model with the Keras model
-        _, keras_trace = model.call_trace(dummy_input, training=False)
-        print(f"Keys in torch trace: {torch_trace.keys()}")
-        print(f"Keys in keras trace: {keras_trace.keys()}")
-
-    gt_test_sample_outputs = pth_dict["test_sample_outputs"]
-    print(f"Ran initial forward inference with samples: \n{test_sample_outputs}")
-    outputs_match = np.allclose(test_sample_outputs, gt_test_sample_outputs)
-    print(f"Do the outputs of the PyTorch and TF model match? {outputs_match}")
-
-    print(model.summary(expand_nested=True))
-
+def save_to_tflite(cfg: Config, keras_model: tf.keras.Model):
     # Convert the model to TFLite
-    converter = tf.lite.TFLiteConverter.from_keras_model(model)
+    converter = tf.lite.TFLiteConverter.from_keras_model(keras_model)
     tflite_model = converter.convert()
 
     # Save the TFLite model
-    with open("test_number_model.tflite", "wb") as f:
+    save_path = Path(cfg.save_parameters.model_path) / f"{cfg.save_parameters.model_name}.tflite"
+    with open(save_path, "wb") as f:
         f.write(tflite_model)
-    print("Saved model to test_number_model.tflite.")
+    print(f"Saved model to {save_path}")
 
     # Load the model
-    interpreter = Interpreter(model_path="test_number_model.tflite")
+    interpreter = Interpreter(model_path=save_path)
     interpreter.allocate_tensors()
-    print("Loaded TFLite model.")
+    print("Successfully loaded the TFLite model.")
 
     # Get input and output details
     input_details = interpreter.get_input_details()
@@ -404,7 +404,45 @@ def main(cfg: Config):
     interpreter.invoke()
     output = interpreter.get_tensor(output_details[0]['index'])
 
-    print("TFLite output shape:", output.shape)
+    print("The TFLite model produces output with shape:", output.shape)
+
+@hydra.main(config_path="./config", version_base=None)
+def main(cfg: Config):
+
+    # load in the .pth dictionary of the Torch model
+    pth_path = Path(cfg.save_parameters.model_path) / f"{cfg.save_parameters.model_name}.pth"
+    print(f"Loading pth dict from path: {pth_path}")
+    pth_dict = torch.load(pth_path, map_location='cpu')
+
+    # use our explicit model builder to create the Keras model with the same architecture
+    # as the Torch model with the same parameters
+    builder = KerasModelBuilder()
+    model = builder.build(pth_dict["custom_state_dict"])
+    model.build(input_shape=(None, 50, 50, 1))  # (batch, height, width, channels)
+
+    # print a summary of the model
+    print(model.summary(expand_nested=True))
+
+    # compute the output of the Keras model on the randomized sample input
+    # from the Torch training script
+    # Shape (batch, channels, height, width) -> (batch, height, width, channels)
+    test_samples = pth_dict["test_samples"].transpose(0, 2, 3, 1)
+    torch_gt_output = pth_dict["test_sample_outputs"]
+    tf_test_samples = tf.convert_to_tensor(test_samples)
+    tf_output = model(tf_test_samples, training=False)
+
+    torch_trace = pth_dict.get("trace")
+    if torch_trace is not None:
+        # compare the trace of the torch model with the Keras model
+        _, keras_trace = model.call_trace(tf_test_samples, training=False)
+        compare_traces(torch_trace, keras_trace)
+
+    # compare the outputs of the Torch model and the Keras model on the input samples
+    outputs_match = np.allclose(torch_gt_output, tf_output)
+    print(f"Outputs match between Torch and Keras? {outputs_match}")
+
+    # save the model as a .tflite model that can be run on Android
+    save_to_tflite(cfg, model)
 
 if __name__ == "__main__":
     main()
