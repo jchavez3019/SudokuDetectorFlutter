@@ -7,42 +7,126 @@ import torch
 from torch.utils.data import TensorDataset, random_split
 from torch.utils.data.dataset import Subset
 from torch import Tensor, Size
+from pathlib import Path
 from typing import *
 
-def resize_image_high_quality(image, target_width: int = 3400, target_height: int = 2500, verbose: bool = False):
+class SudokuDataset(torch.utils.data.Dataset):
     """
-    Resize image to target dimensions only if current dimensions are smaller.
-    Uses high-quality interpolation methods.
+    Dataset class for the Sudoku dataset. The occurrences of each label are counted,
+    and the inverse frequency is calculated to address class imbalance.
+    In particular, the dataset will typically contain a lot of empty cells and therefore
+    samples with a label of zero will dominate the dataset.
+    """
+    def __init__(self, images: torch.Tensor, labels: torch.Tensor, num_classes: int = 10):
+        self.x = images.to(device='cpu')
+        self.y = labels.to(device='cpu')
+        self.total_size = labels.numel() # total size of the dataset
+        # First, compute the inverse frequency which will give larger weights to more
+        # rare occurrences. Then, normalize and scale by the number of classes.
+        label_frequency, _ = torch.histogram(labels.to(dtype=torch.float32), bins=num_classes)
+        self.weights = 1.0 / label_frequency
+        self.weights = (self.weights / self.weights.sum()) * num_classes
 
-    Args:
-        image: Input image (numpy array)
-        target_width: Target width (default: 3400)
-        target_height: Target height (default: 2500)
+    def __len__(self)->int:
+        return len(self.x)
 
-    Returns:
-        Resized image or original image if already large enough
+    def __getitem__(self, idx) -> Tuple[Tensor, Tensor]:
+        return self.x[idx], self.y[idx]
+
+def get_sudoku_dataset(dataset_path: str, split: float = 0.8,
+                       supported_extensions: Tuple[str] = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff'),
+                       verbose: bool = False) -> Tuple[torch.utils.data.dataset, Subset, Subset, Size]:
+    """
+    Returns a training and testing dataset of sudoku images as well as the dimension of a single image.
+    :param dataset_path:            Path to the sudoku dataset.
+    :param split:                   The desired training to testing split ratio.
+    :param supported_extensions:    The type of images supported by the dataset.
+    :param verbose:                 If true, prints additional information.
+    :return:
+    """
+    # Initialize lists to store image file paths and their corresponding labels
+    file_paths = []
+    labels = []
+
+    for label_path in os.listdir(dataset_path):
+        # Iterate over each label directory
+        label_directory = os.path.join(dataset_path, label_path)
+        if not os.path.isdir(label_directory):
+            # the label_directory is not a valid path
+            if verbose:
+                print(f"Skipping {label_path}")
+            continue
+        for ext in supported_extensions:
+            # Iterate through each supported file extension and add them to the total
+            # set of labels and file paths
+
+            # this returns all file paths in the label directory that match the current extension
+            ext_paths = [str(f) for f in Path(label_directory).glob(f"*{ext}")]
+            # extend the labels for the current set of images
+            labels.extend([int(label_path)] * len(ext_paths))
+            # extend the image file paths
+            file_paths.extend(ext_paths)
+
+    # convert labels from a list to a tensor
+    labels = torch.as_tensor(labels, dtype=torch.int32)
+    # load in and decode all the image paths
+    all_images = [cv2.imread(path, cv2.IMREAD_GRAYSCALE) for path in file_paths]
+    # convert each decoded image into a tensor
+    all_images = format_inputs_cells(all_images)
+
+    if verbose:
+        print("Dataset shapes:")
+        print(f"\tShape labels: {labels.shape}, dtype: {labels.dtype}")
+        print(f"\tShape all_images: {all_images.shape}, dtype: {all_images.dtype}")
+
+    # compile all images and labels into a TensorDataset and compute the sizes
+    dataset = SudokuDataset(all_images, labels)
+    train_size = int(split * len(labels))
+    test_size = len(labels) - train_size
+
+    # perform a randomized train/test split
+    train_data, test_data = random_split(dataset, [train_size, test_size])
+    single_image_dimension = all_images.shape[1:]
+
+    return dataset, train_data, test_data, single_image_dimension
+
+def invert_image_colors(image_path: str) -> Union[cv2.Mat, np.ndarray[Any, np.dtype]]:
+    return 255 - cv2.imread(image_path)
+
+def resize_image_high_quality(image: Union[cv2.Mat, np.ndarray[Any, np.dtype]], target_width: int = 3400, target_height: int = 2500,
+                              interpolation_method: int = cv2.INTER_LANCZOS4, verbose: bool = False):
+    """
+    Resize the image to the target dimension only if current dimensions are smaller. Uses high-quality interpolation methods.
+    :param image:                   Input image (numpy array)
+    :param target_width:            Target width (default: 3400)
+    :param target_height:           Target height (default: 2500)
+    :param interpolation_method:    INTER_CUBIC produces high quality scaling, and INTER_LANCZOS4 has even higher
+                                    quality with slower speed.
+    :param verbose:                 If true, prints additional information.
+    :return:                        Resized image or original image if already large enough.
     """
     current_height, current_width = image.shape[:2]
-
-    # Check if image is already at least the target size
     if current_width >= target_width and current_height >= target_height:
+        # if the image is already larger than the target size, return it as is
         if verbose: print(f"Image already large enough ({current_width}x{current_height}). No resize needed.")
         return image
 
     if verbose: print(f"Resizing from {current_width}x{current_height} to {target_width}x{target_height}")
 
-    # Use INTER_CUBIC for high quality upscaling
-    # INTER_LANCZOS4 is even higher quality but slower
-    resized = cv2.resize(image, (target_width, target_height), interpolation=cv2.INTER_CUBIC)
+    # resize the image
+    resized = cv2.resize(image, (target_width, target_height), interpolation=interpolation_method)
 
     return resized
 
-def detectSudokuPuzzle(image_path: str, new_size: Optional[Tuple[int, int]] = None, silent: bool = True, display: bool = False):
+def extract_sudoku_puzzle(image_path: str, new_size: Optional[Tuple[int, int]] = None, verbose: bool = False,
+                          display: bool = False) -> Union[cv2.Mat, np.ndarray[Any, np.dtype]]:
     """
     Extracts a warped and cropped sudoku puzzle from an image.
-    @param image_path:
-    @param silent:
-    @return:
+    :param image_path:  The path of the image to extract the sudoku puzzle from.
+    :param new_size:    If specified, the size of the final image should match.
+    :param verbose:     If true, prints additional information.
+    :param display:     If true, plots are displayed of each step of transformation.
+    :return:            A resulting image that extracts soley the Sudoku puzzle from the original image.
     """
     original_image = resize_image_high_quality(cv2.cvtColor(cv2.imread(image_path, cv2.IMREAD_COLOR),
                                                             cv2.COLOR_BGR2RGB))
@@ -52,7 +136,7 @@ def detectSudokuPuzzle(image_path: str, new_size: Optional[Tuple[int, int]] = No
     img_width = gray_image.shape[1]
     img_height = gray_image.shape[0]
 
-    if not silent:
+    if verbose:
         print(f"Shape of image: {img_width}, {img_height}")
 
     modified_image = cv2.addWeighted(gray_image, 1.2, gray_image, 0, 0.0)
@@ -89,14 +173,14 @@ def detectSudokuPuzzle(image_path: str, new_size: Optional[Tuple[int, int]] = No
 
     contourArea = cv2.contourArea(approx)
     # if len(approx) == 4 and abs(contourArea) > 2000 and cv2.isContourConvex(approx):
-    if not silent:
+    if verbose:
         print(f"This is a valid contour; Area of contour is {contourArea}; Shape of approx is {approx.shape}")
     for i in range(len(approx)):
         point = np.squeeze(approx[i])
         print(f"Point_{i}: ({point[0]},{point[1]})")
 
     temp_approx = np.squeeze(approx)
-    if not silent:
+    if verbose:
         print(f"temp_approx shape {temp_approx.shape}")
     abs_vals = np.array([temp_approx[i, 0] * temp_approx[i, 1] for i in range(temp_approx.shape[0])])
     tl_idx = np.argmin(abs_vals)
@@ -110,7 +194,7 @@ def detectSudokuPuzzle(image_path: str, new_size: Optional[Tuple[int, int]] = No
         other_idx[1], 0] else temp_approx[other_idx[1], :]
 
     reordered_approx = np.expand_dims(np.array([top_left, top_right, bottom_right, bottom_left]), axis=1)
-    if not silent:
+    if verbose:
         print(f"Reordered: \n{reordered_approx}")
     approx = reordered_approx
     # break
@@ -132,7 +216,7 @@ def detectSudokuPuzzle(image_path: str, new_size: Optional[Tuple[int, int]] = No
     # Apply the perspective transformation
     result_img = cv2.warpPerspective(colored_image, transformation_matrix, (int(square_size), int(square_size)))
 
-    if not silent:
+    if verbose:
         print(f"Orientation: {orientation}, Square Size: {square_size}, Image dimensions: {original_image.shape}")
         print(f"Target (x,y) coordinates:\n{target_coordinates}")
 
@@ -152,92 +236,81 @@ def detectSudokuPuzzle(image_path: str, new_size: Optional[Tuple[int, int]] = No
 
     return result_img
 
-
-def parse_dat(dat_path: str) -> np.ndarray:
-    """
-    Parses a .dat file and returns the labels of a sudoku puzzle as a 1D np array
-    @param dat_path:
-    @return:
-    """
-    numbers = []
-    with open(dat_path, 'r') as file:
-        for i, line in enumerate(file):
-            if i < 2:
-                continue
-            # Split the string into substrings based on spaces
-            number_strings = line.split()
-
-            # Convert each substring to an integer and store them in a list
-            numbers.append([int(num_str) for num_str in number_strings])
-
-    return np.array(numbers)
-
 def format_inputs_cells(cells: list[np.ndarray]) -> Tensor:
+    """
+    Given a list of, presumably 81, decoded cells that the Sudoku puzzle is composed of, convert them to
+    Tensors that is compatible with a Torch model.
+    :param cells:   List of decoded cells.
+    :return:        Tensor format of the cells.
+    """
+    # resize each image to be 50x50
     cells = np.array(
         [cv2.resize(cell, (50, 50)).astype(np.float32) / 255.0 for cell in
          cells])
+    # convert all images to tensors and add a channel dimension
     all_images = torch.tensor(cells)
-    all_images = all_images.unsqueeze(1)  # add a channel dimension to indicate to the NN the images are black & white
+    all_images = all_images.unsqueeze(1)  # channel dimension indicates to the NN the images are black and white
 
     return all_images
 
-def get_sudoku_dataset(split: float = 0.8, verbose: bool = False) -> Tuple[Subset, Subset, Size]:
+def parse_processed_dataset(dataset_path: str, out_path: str,
+                            supported_extensions: Tuple[str] = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff'),):
     """
-    Returns a training and testing dataset of sudoku images as well as the dimension of a single image.
-    @param split: The desired training to testing split size
-    @return:
+    Creates a number dataset from a **processed** dataset. Processed in the sense that each image from the dataset
+    solely contains a bird's eye view of the Sudoku puzzle and nothing else.
+    :param dataset_path:            Path to a **processed** dataset.
+    :param out_path:                Path to save parsed cells in the processed dataset.
+    :param supported_extensions:    Images supported by the dataset.
     """
-    # Define the directory containing all the label directories
-    main_directory = './cell_dataset'
+    # get the names of all files in the dataset_path
+    all_file_names = os.listdir(dataset_path)
+    # convert to Path objects
+    dataset_path = Path(dataset_path)
+    out_path = Path(out_path)
+    # get all the filenames of all the supported images
+    image_file_names = sorted(
+        [dataset_path / filename for filename in all_file_names if filename.endswith(supported_extensions)]
+    )
+    # get the .dat file for all the images that were extracted
+    dat_filenames = sorted(
+        [filename.with_suffix('.dat') for filename in image_file_names]
+    )
+    # this counter keeps track of the image count for each label
+    folder_counter = np.zeros(10, dtype=np.int32)
+    for image_fn, dat_fn in zip(image_file_names, dat_filenames):
+        # parse the image to get the cells and corresponding labels
+        cells, labels = parse_cells(str(image_fn), str(dat_fn))
 
-    # Initialize lists to store image file paths and their corresponding labels
-    file_paths = []
-    labels = []
+        for i, (label, cell) in enumerate(zip(labels, cells)):
+            # enumerate over each label and the cell's image
+            label_path = out_path / f"{label}"
+            if not os.path.exists(label_path):
+                # create the path to the label's folder if it does not exist yet
+                os.makedirs(label_path)
 
-    # Iterate over each label directory
-    for label in os.listdir(main_directory):
-        label_directory = os.path.join(main_directory, label)
-        if os.path.isdir(label_directory):
-            # Iterate over each image file in the label directory
-            for file in os.listdir(label_directory):
-                if file.endswith('.jpg'):
-                    # Append the file path and label to the respective lists
-                    file_path = os.path.join(label_directory, file)
-                    file_paths.append(file_path)
-                    labels.append(int(label))
+            try:
+                # save the cell's image to the appropriate path and increment the label counter
+                cv2.imwrite(str(label_path / f"{folder_counter[label]}.jpg"), cell)
+                folder_counter[label] += 1
+            except IndexError:
+                print(f"Len cells {len(cells)}, len labels: {len(labels)}")
+                print(f"Index out of range: {label}. File name: {image_fn}")
 
-    labels = np.array(labels, dtype=np.int32) # to numpy array
-    labels = torch.tensor(labels) # to tensor
-    all_images = [cv2.imread(path, cv2.IMREAD_GRAYSCALE) for path in file_paths]
-    all_images = format_inputs_cells(all_images)
 
-    if verbose:
-        print("Dataset shapes:")
-        print(f"\tShape labels: {labels.shape}, dtype: {labels.dtype}")
-        print(f"\tShape all_images: {all_images.shape}, dtype: {all_images.dtype}")
-
-    dataset = TensorDataset(all_images, labels)
-    train_size = int(split * len(labels))
-    test_size = len(labels) - train_size
-
-    train_data, test_data = random_split(dataset, [train_size, test_size])
-    single_image_dimension = all_images.shape[1:]
-
-    return train_data, test_data, single_image_dimension
-
-def parseCells(warped: Union[str, np.ndarray], dat_path: str) -> Tuple[list[np.ndarray], np.ndarray]:
+def parse_cells(extracted_img: Union[str, np.ndarray], dat_path: str) -> Tuple[list[np.ndarray], np.ndarray]:
     """
-    Parses a warped image into 81 cells naively with their corresponding label
-    @param warped:
-    @param dat_path:
-    @return:
+    Parses a processed image that solely contains a Sudoku puzzle into 81 cells naively with their corresponding label.
+    :param extracted_img:   An image that contains solely the Sudoku puzzle, potentially extracted from a different
+                            image.
+    :param dat_path:        Path to the puzzle's labels.
+    :return:                List of 81 cells and corresponding labels.
     """
-    if isinstance(warped, str):
-        full_img = cv2.imread(warped, cv2.IMREAD_GRAYSCALE)
-    elif isinstance(warped, np.ndarray):
-        full_img = warped
+    if isinstance(extracted_img, str):
+        full_img = cv2.imread(extracted_img, cv2.IMREAD_GRAYSCALE)
+    elif isinstance(extracted_img, np.ndarray):
+        full_img = extracted_img
     else:
-        raise ValueError(f"Unsupported type {type(warped)}")
+        raise ValueError(f"Unsupported type {type(extracted_img)}")
     # parse the image into a 9x9 grid and append the cells
     cells = []
     step_x = full_img.shape[1] // 9
@@ -250,3 +323,22 @@ def parseCells(warped: Union[str, np.ndarray], dat_path: str) -> Tuple[list[np.n
     # parse the .dat file to get the corresponding labels for each cell in the image
     labels = parse_dat(dat_path).flatten()
     return cells, labels
+
+def parse_dat(dat_path: str) -> np.ndarray:
+    """
+    Parses a .dat file and returns the labels of a sudoku puzzle as a 1D np array
+    :param dat_path:
+    :return:
+    """
+    numbers = [] # a 2D array of the number in each cell
+    with open(dat_path, 'r') as file:
+        for i, line in enumerate(file):
+            if i < 2:
+                # the first two lines specify attributes of the associated image
+                continue
+            # Split the string into substrings based on spaces
+            number_strings = line.split()
+            # Convert each substring to an integer and store them in a list
+            numbers.append([int(num_str) for num_str in number_strings])
+
+    return np.array(numbers)

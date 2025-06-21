@@ -10,7 +10,14 @@ class SaveParameters:
     trace_sample: bool = field(default=False, metadata={"help": "Set flag if the sample input should be traced through the model's layers."})
 
 @dataclass
+class LRateScheduler:
+    enable: bool = field(default=False, metadata={"help": "If true, use a learning rate scheduler."})
+    type: str = field(default="fixed", metadata={"help": "Type of learning rate decay."})
+
+@dataclass
 class Training:
+    dataset_path: str = field(default="", metadata={"help": "Directory containing the dataset."})
+    train_test_split: float = field(default=0.8, metadata={"help": "Percentage of the dataset to use for training."})
     epochs: int = field(default=80, metadata={"help": "Number of training epochs."})
     lrate: float = field(default=0.001, metadata={"help": "Learning rate."})
     batch_size: int = field(default=64, metadata={"help": "Batch size per epcch."})

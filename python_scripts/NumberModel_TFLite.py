@@ -6,19 +6,18 @@ This script is meant to generate a TFLite model that can be used on Android.
 """
 # tensorflow imports
 from keras.models import Sequential
-from keras.layers import Input, Dense, Dropout, Flatten
+from keras.layers import Input, Dense
 from keras.layers import Conv2D, MaxPooling2D, BatchNormalization, ReLU, GlobalAveragePooling2D, ZeroPadding2D
 import tensorflow as tf
 from ai_edge_litert.interpreter import Interpreter
 
 # other imports
 import numpy as np
-import os, argparse, torch
-from torch import nn
+import torch
 from typing import *
 import hydra
 from pathlib import Path
-from config.config_schema import Config, Architecture
+from config.config_schema import Config
 
 print("TensorFlow version:", tf.__version__)
 print("GPU available:", tf.config.list_physical_devices('GPU'))
@@ -358,6 +357,7 @@ def compare_traces(torch_trace: Dict[str, np.ndarray],
     Compares the outputs of each layer between the Keras model and the Torch model.
     :param torch_trace: Dictionary containing the outputs of each layer in the Torch model.
     :param keras_trace: Dictionary containing the outputs of each layer in the Keras model.
+    :param np_atol:     Absolute tolerance to use when comparing the trace outputs between the models.
     """
     print(f"Keys in torch trace: {torch_trace.keys()}")
     print(f"Keys in keras trace: {keras_trace.keys()}")

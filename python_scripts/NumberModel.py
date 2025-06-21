@@ -14,10 +14,14 @@ from collections import OrderedDict
 import numpy as np
 import hydra
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 from config.config_schema import Config, Architecture
-
 from python_helper_functions import get_sudoku_dataset
+
+print(f"Available matplotlib styles: {plt.style.available}")
+plt.rcParams['text.usetex'] = True
+plt.style.use("seaborn-v0_8-white")
 
 to_numpy = lambda x : x.detach().cpu().numpy() if isinstance(x, Tensor) else x
 
@@ -532,8 +536,8 @@ def main(cfg: Config):
     if cfg.save_parameters.load_model is not None:
         pth_path = cfg.save_parameters.load_model
         pth_dict = torch.load(pth_path, map_location=device)
-        _, _, single_image_dimension = get_sudoku_dataset(verbose=False)
-        net = NumberModel(lrate, cfg.architecture, loss_fn).to(device)
+        _, _, _, single_image_dimension = get_sudoku_dataset(verbose=False)
+        net = NumberModel(lrate, cfg.architecture, None).to(device)
         net.load_state_dict(pth_dict["state_dict"])
         net.eval()
         test_samples = torch.from_numpy(pth_dict["test_samples"]).to(dtype=torch.float32, device=device)
@@ -545,7 +549,9 @@ def main(cfg: Config):
     else:
 
         # load in the sudoku dataset
-        train_data, test_data, single_image_dimension = get_sudoku_dataset(verbose=True)
+        sudoku_dataset, train_data, test_data, single_image_dimension = get_sudoku_dataset(
+            dataset_path=cfg.training.dataset_path, split=cfg.training.train_test_split,verbose=True
+        )
         assert single_image_dimension == torch.Size(cfg.architecture.image_dimensions), \
             ("The dimensions of an image from the Sudoku dataset does not match the dimensions specified in the "
              "configuration file.")
@@ -557,12 +563,19 @@ def main(cfg: Config):
             "epochs": cfg.training.epochs,
             "cfg": cfg.architecture,
             "lrate": lrate,
-            "loss_fn": loss_fn,
+            "loss_fn": nn.CrossEntropyLoss(weight=sudoku_dataset.weights),
             "batch_size": cfg.training.batch_size,
         }
         losses, net = fit(**params)
 
-        # TODO: At this point, we should display training plots
+        if cfg.misc.display_loss:
+            # if true, show the resulting training loss
+            plt.plot(losses)
+            plt.xlabel("Epoch")
+            plt.ylabel("Loss")
+            plt.title("Training Loss")
+            plt.grid()
+            plt.show()
         
         if cfg.save_parameters.save_model:
             # save the model after training

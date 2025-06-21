@@ -9,8 +9,15 @@ save_parameters:
   load_model: null
   trace_sample: true
 training:
+  dataset_path: ./cell_dataset
+  train_test_split: 0.8
   epochs: 80
   lrate: 0.001
+  lrate_scheduler:
+    enable: true
+    type: cosine_annealing
+    parameters:
+      T_max: 80
   batch_size: 50
 hardware:
   device: cuda
