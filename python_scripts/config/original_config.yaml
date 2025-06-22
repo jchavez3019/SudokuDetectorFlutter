@@ -11,16 +11,16 @@ save_parameters:
 training:
   dataset_path: ./cell_dataset
   train_test_split: 0.8
-  epochs: 80
-  lrate: 0.001
+  epochs: 150
+  lrate: 0.02
+  batch_size: 128
   lrate_scheduler:
     enable: true
     type: cosine_annealing
     parameters:
-      T_max: 80
-  batch_size: 50
+      T_max: 150
 hardware:
   device: cuda
 misc:
   verbose_architecture: false
-  display_loss: false
+  display_loss: true

@@ -12,7 +12,10 @@ class SaveParameters:
 @dataclass
 class LRateScheduler:
     enable: bool = field(default=False, metadata={"help": "If true, use a learning rate scheduler."})
-    type: str = field(default="fixed", metadata={"help": "Type of learning rate decay."})
+    type: str = field(default="exponential_lr", metadata={"help": "Type of learning rate scheduler."})
+    parameters: dict = field(default_factory=dict, metadata={
+        "help": "Dictionary of parameters to pass to the learning rate scheduler. To ensure no issues, refer to the "
+                "PyTorch documentation for the proposed learning rate scheduler."})
 
 @dataclass
 class Training:
@@ -20,7 +23,8 @@ class Training:
     train_test_split: float = field(default=0.8, metadata={"help": "Percentage of the dataset to use for training."})
     epochs: int = field(default=80, metadata={"help": "Number of training epochs."})
     lrate: float = field(default=0.001, metadata={"help": "Learning rate."})
-    batch_size: int = field(default=64, metadata={"help": "Batch size per epcch."})
+    batch_size: int = field(default=64, metadata={"help": "Batch size per epoch."})
+    lrate_scheduler: LRateScheduler = field(default_factory=LRateScheduler, metadata={"help": "Learning rate scheduler configuration."})
 
 @dataclass
 class Hardware:

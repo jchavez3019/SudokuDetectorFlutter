@@ -16,8 +16,8 @@ import hydra
 from pathlib import Path
 import matplotlib.pyplot as plt
 
-from config.config_schema import Config, Architecture
-from python_helper_functions import get_sudoku_dataset
+from config.config_schema import Config, Architecture, LRateScheduler
+from python_helper_functions import get_sudoku_dataset, get_lr_scheduler
 
 print(f"Available matplotlib styles: {plt.style.available}")
 plt.rcParams['text.usetex'] = True
@@ -76,12 +76,14 @@ class BasicBlock(nn.Module):
 
 
 class NumberModel(nn.Module):
-    def __init__(self, lrate: float, cfg: Architecture, loss_fn: Optional[Callable] = None):
+    def __init__(self, lrate: float, cfg: Architecture, loss_fn: Optional[Callable] = None,
+                 scheduler_type: Optional[str] = None, scheduler_params: Optional[dict] = None):
         """
-        Initializes the Neural Network model
-        :param lrate:   Learning rate for the model.
-        :param cfg:     Architecture configuration.
-        :param loss_fn: Loss function for the model. If None, the model cannot be stepped.
+        Initializes the Neural Network model.
+        :param lrate:              Learning rate for the model.
+        :param cfg:                Architecture configuration.
+        :param loss_fn:            Loss function for the model. If None, the model cannot be stepped.
+        :param scheduler_type:    The learning rate scheduler to use.
         """
         super(NumberModel, self).__init__()
 
@@ -140,7 +142,14 @@ class NumberModel(nn.Module):
         self.model = nn.Sequential(OrderedDict(model_layers))
 
         self.loss_fn = loss_fn
+        self.lrate = lrate
         self.optimizer = optim.SGD(self.parameters(), lr=lrate, weight_decay=1e-5)
+
+        self.scheduler = None
+        self.scheduler_type = scheduler_type
+        if scheduler_type is not None:
+            self.scheduler = get_lr_scheduler(scheduler_type, self.optimizer, scheduler_params, verbose=True)
+
 
     def _make_layer(self, block, out_channels: int, blocks: int, stride: int = 1):
         """
@@ -203,6 +212,14 @@ class NumberModel(nn.Module):
         self.optimizer.step()
 
         return loss.item()
+
+    def scheduler_step(self) -> float:
+        """If used, steps the learning rate scheduler and returns the learning rate used prior to the step."""
+        if self.scheduler is not None:
+            self.scheduler.step()
+            return self.scheduler.get_last_lr()[0]
+        else:
+            return self.lrate
 
 class NetParser:
     """
@@ -377,7 +394,7 @@ def get_explicit_model(net: NumberModel, verbose: bool = False) -> dict:
     return torch_model_dict
 
 
-def train_model(net: NumberModel, epochs: int, train_loader: DataLoader) -> List[float]:
+def train_model(net: NumberModel, epochs: int, train_loader: DataLoader) -> Tuple[List[float], List[float]]:
     """
     Trains a model for a number of epochs given a training set.
     :param net:             Network model to train.
@@ -386,6 +403,7 @@ def train_model(net: NumberModel, epochs: int, train_loader: DataLoader) -> List
     :return:                A list of loss values over epochs.
     """
     losses = []
+    learning_rates = []
     epoch_progress_bar = tqdm(range(epochs), desc="Epochs", leave=True)
     for epoch in range(epochs):
         epoch_loss = 0.0
@@ -395,12 +413,16 @@ def train_model(net: NumberModel, epochs: int, train_loader: DataLoader) -> List
             batch_y = batch_y.to(device)
             curr_epoch_loss = net.step(batch_x, batch_y)
             epoch_loss += curr_epoch_loss
-            losses.append(curr_epoch_loss)
+            # losses.append(curr_epoch_loss)
         epoch_loss /= len(train_loader)
+        epoch_lrate = net.scheduler_step()
         epoch_progress_bar.update(1)
-        epoch_progress_bar.set_postfix({'Epoch Loss': epoch_loss})
+        epoch_progress_bar.set_postfix({'Epoch Loss': epoch_loss, 'Epoch lrate': epoch_lrate})
 
-    return losses
+        losses.append(epoch_loss)
+        learning_rates.append(epoch_lrate)
+
+    return losses, learning_rates
 
 def evaluate_model(net: NumberModel, test_loader: DataLoader) -> float:
     """
@@ -490,7 +512,9 @@ def fit(
         lrate: float = 0.01,
         loss_fn = nn.CrossEntropyLoss(),
         batch_size: int = 50,
-) -> Tuple[list[float], NumberModel]:
+        scheduler_type: Optional[str] = None,
+        scheduler_params: Optional[Dict[str, Any]] = None,
+) -> Tuple[List[float], List[float], NumberModel]:
     """
     Trains the model and returns the losses as well as the model.
     :param train_dataset:   A randomized subset of the dataset to be used for training the model.
@@ -507,10 +531,10 @@ def fit(
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
     # initialize net and send to a device
-    net = NumberModel(lrate, cfg, loss_fn).to(device)
+    net = NumberModel(lrate, cfg, loss_fn, scheduler_type=scheduler_type, scheduler_params=scheduler_params).to(device)
 
     # train the model
-    losses = train_model(net, epochs, train_loader)
+    losses, learning_rates = train_model(net, epochs, train_loader)
 
     # Set the model to evaluation mode
     net.eval()
@@ -521,7 +545,7 @@ def fit(
     accuracy = evaluate_model(net, test_loader)
     print('Accuracy:', accuracy)
 
-    return losses, net
+    return losses, learning_rates, net
 
 @hydra.main(config_path="./config", version_base=None)
 def main(cfg: Config):
@@ -537,7 +561,10 @@ def main(cfg: Config):
         pth_path = cfg.save_parameters.load_model
         pth_dict = torch.load(pth_path, map_location=device)
         _, _, _, single_image_dimension = get_sudoku_dataset(verbose=False)
-        net = NumberModel(lrate, cfg.architecture, None).to(device)
+        net = NumberModel(lrate, cfg.architecture, None,
+                          scheduler_type=cfg.training.lrate_scheduler.type,
+                          scheduler_params=cfg.training.lrate_scheduler.parameters,
+                          ).to(device)
         net.load_state_dict(pth_dict["state_dict"])
         net.eval()
         test_samples = torch.from_numpy(pth_dict["test_samples"]).to(dtype=torch.float32, device=device)
@@ -565,18 +592,30 @@ def main(cfg: Config):
             "lrate": lrate,
             "loss_fn": nn.CrossEntropyLoss(weight=sudoku_dataset.weights),
             "batch_size": cfg.training.batch_size,
+            "scheduler_type": cfg.training.lrate_scheduler.type,
+            "scheduler_params": cfg.training.lrate_scheduler.parameters,
         }
-        losses, net = fit(**params)
+        losses, learning_rates, net = fit(**params)
 
         if cfg.misc.display_loss:
             # if true, show the resulting training loss
-            plt.plot(losses)
-            plt.xlabel("Epoch")
-            plt.ylabel("Loss")
-            plt.title("Training Loss")
-            plt.grid()
+            fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(18, 14))
+            ax1, ax2 = np.ravel(axs)
+
+            ax1.plot(losses)
+            ax1.set_xlabel("Epoch")
+            ax1.set_ylabel("Loss")
+            ax1.set_title("Training Loss")
+            ax1.grid()
+
+            ax2.plot(learning_rates)
+            ax2.set_xlabel("Epoch")
+            ax2.set_ylabel("Learning Rate")
+            ax2.set_title("Training Learning Rates")
+            ax2.grid()
+
             plt.show()
-        
+
         if cfg.save_parameters.save_model:
             # save the model after training
             save_model(net, cfg, cfg.misc.verbose_architecture)

@@ -7,7 +7,9 @@ import torch
 from torch.utils.data import TensorDataset, random_split
 from torch.utils.data.dataset import Subset
 from torch import Tensor, Size
+import torch.optim as optim
 from pathlib import Path
+from functools import partial
 from typing import *
 
 class SudokuDataset(torch.utils.data.Dataset):
@@ -89,9 +91,6 @@ def get_sudoku_dataset(dataset_path: str, split: float = 0.8,
     single_image_dimension = all_images.shape[1:]
 
     return dataset, train_data, test_data, single_image_dimension
-
-def invert_image_colors(image_path: str) -> Union[cv2.Mat, np.ndarray[Any, np.dtype]]:
-    return 255 - cv2.imread(image_path)
 
 def resize_image_high_quality(image: Union[cv2.Mat, np.ndarray[Any, np.dtype]], target_width: int = 3400, target_height: int = 2500,
                               interpolation_method: int = cv2.INTER_LANCZOS4, verbose: bool = False):
@@ -342,3 +341,55 @@ def parse_dat(dat_path: str) -> np.ndarray:
             numbers.append([int(num_str) for num_str in number_strings])
 
     return np.array(numbers)
+
+### Custom LR Schedulers
+def linear_decay(epoch, initial_lr, final_lr, total_epochs, last_decay:float=1e-3):
+    """
+
+    :param epoch:
+    :param initial_lr:
+    :param final_lr:
+    :param total_epochs:
+    :param last_decay:
+    :return:
+    """
+    # # FIXME: Currently hard-coded to a tailored configuration that shows stable convergence. The parameters should
+    # # be modified instead of hard-coded.
+    # if epoch < 25:
+    #     total_epochs = 25
+    #     return 1 - epoch / total_epochs * (1 - final_lr / initial_lr)
+    # else:
+    #     return last_decay
+    return 1 - epoch / total_epochs * (1 - final_lr / initial_lr)
+
+def get_lr_scheduler(scheduler_type: str, optimizer: optim.Optimizer, lr_parameters: Dict[str, Any],
+                     verbose: bool = False):
+    """
+    Return the learning rate scheduler to use from a common set.
+    :param scheduler_type:
+    :param optimizer:
+    :param lr_parameters:
+    :param verbose:
+    :return:
+    """
+    if verbose:
+        print(f"Using {scheduler_type} learning rate scheduler with parameters: {lr_parameters}")
+
+    # set linear LR scheduler
+    scheduler = None
+    if scheduler_type == 'step':
+        step_size = lr_parameters.pop('step_size')
+        gamma = lr_parameters.pop('gamma')
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=step_size,
+                                                   gamma=gamma, **lr_parameters)
+    elif scheduler_type == 'linear':
+        decay_func = partial(linear_decay, **lr_parameters)
+        scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=decay_func)
+    elif scheduler_type == "cosine_annealing":
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, **lr_parameters)
+    elif scheduler_type == 'none':
+        pass
+    else:
+        raise ValueError(f"Scheduler type of {scheduler_type} is not recognized")
+
+    return scheduler

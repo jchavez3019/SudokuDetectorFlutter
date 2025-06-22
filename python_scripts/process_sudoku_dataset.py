@@ -26,7 +26,7 @@ import cv2
 import shutil
 import numpy as np
 
-from python_helper_functions import extract_sudoku_puzzle, invert_image_colors
+from python_helper_functions import extract_sudoku_puzzle
 from python_scripts.python_helper_functions import parse_processed_dataset
 
 # Configure logging
