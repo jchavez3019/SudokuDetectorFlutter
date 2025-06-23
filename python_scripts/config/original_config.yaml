@@ -12,13 +12,13 @@ training:
   dataset_path: ./cell_dataset
   train_test_split: 0.8
   epochs: 150
-  lrate: 0.02
+  lrate: 0.015
   batch_size: 128
   lrate_scheduler:
     enable: true
     type: cosine_annealing
     parameters:
-      T_max: 150
+      T_max: 30
 hardware:
   device: cuda
 misc:

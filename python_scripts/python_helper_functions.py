@@ -342,6 +342,143 @@ def parse_dat(dat_path: str) -> np.ndarray:
 
     return np.array(numbers)
 
+class CannyEdgeDetector:
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def gaussian_blur(img: cv2.Mat, ksize=(5, 5), sigma: float=1.0)->cv2.Mat:
+        """
+        Applies a Gaussian Blur filter to the image.
+        :param img:     Image to blur.
+        :param ksize:   Size of the Gaussian kernel.
+        :param sigma:   Variance of the Gaussian kernel.
+        :return:        Blurred image.
+        """
+        return cv2.GaussianBlur(img, ksize, sigmaX=sigma, sigmaY=sigma)
+
+    @staticmethod
+    def compute_gradients(img: cv2.Mat) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Uses the Sobel filter to calculate the magnitude and angle of the gradients in an image.
+        :param img: Image to process.
+        :return:    Magnitude and angle of the gradients.
+        """
+        gx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
+        gy = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
+        mag = np.hypot(gx, gy)
+        angle = np.arctan2(gy, gx) * 180 / np.pi
+        angle[angle < 0] += 180
+        return mag, angle
+
+    @staticmethod
+    def non_maximum_suppression(mag: np.ndarray, angle: np.ndarray) -> np.ndarray:
+        """
+        Retain only the local maxima in the gradient direction.
+        :param mag:     The gradient magnitudes.
+        :param angle:   The gradient angles.
+        :return:        The gradient magnitudes' local maxima.
+        """
+        H, W = mag.shape
+        output = np.zeros((H, W), dtype=np.float64)
+
+        angle = angle % 180
+        for i in range(1, H - 1):
+            for j in range(1, W - 1):
+                q, r = 255, 255
+                a = angle[i, j]
+
+                if (0 <= a < 22.5) or (157.5 <= a <= 180):
+                    q = mag[i, j + 1]
+                    r = mag[i, j - 1]
+                elif 22.5 <= a < 67.5:
+                    q = mag[i + 1, j - 1]
+                    r = mag[i - 1, j + 1]
+                elif 67.5 <= a < 112.5:
+                    q = mag[i + 1, j]
+                    r = mag[i - 1, j]
+                elif 112.5 <= a < 157.5:
+                    q = mag[i - 1, j - 1]
+                    r = mag[i + 1, j + 1]
+
+                if mag[i, j] >= q and mag[i, j] >= r:
+                    output[i, j] = mag[i, j]
+        return output
+
+    @staticmethod
+    def double_threshold(img: cv2.Mat, low_thresh: float, high_thresh: float) -> Tuple[np.ndarray, int, int]:
+        """
+        We classify the intensity of the pixels in the image to 3 classes based on the specified thresholds:
+
+        1) The pixel has large intensity
+        2) The pixel has small intensity
+        3) The pixel has no intensity
+
+        :param img:         The image to threshold.
+        :param low_thresh:  Low threshold for continuing an edge.
+        :param high_thresh: High threshold for beginning an edge.
+        :return:            The intensity of each pixel intensity values.
+        """
+        strong = 255 # intensity for strong edges
+        weak = 75 # intensity for weak edges
+
+        # map the pixel indices to 1) strong edge 2) weak edge 3) no edge
+        strong_i, strong_j = np.where(img >= high_thresh)
+        weak_i, weak_j = np.where((img <= high_thresh) & (img >= low_thresh))
+
+        # color in the output
+        output = np.zeros_like(img, dtype=np.uint8)
+        output[strong_i, strong_j] = strong
+        output[weak_i, weak_j] = weak
+
+        return output, weak, strong
+
+    @staticmethod
+    def hysteresis(img: cv2.Mat, weak:int=75, strong:int=255) -> cv2.Mat:
+        """
+        Process all the pixels with weak intensity, retaining only those that are part of a continued edge.
+        :param img:     Image to apply hysteresis.
+        :param weak:    The weak intensity value.
+        :param strong:  The strong intensity value.
+        :return:        Image with filtered edges.
+        """
+        H, W = img.shape
+
+        for i in range(1, H - 1):
+            for j in range(1, W - 1):
+                if img[i, j] == weak:
+                    # we process all the pixels with weak intensity
+
+                    if ((img[i + 1, j - 1] == strong) or (img[i + 1, j] == strong) or (img[i + 1, j + 1] == strong)
+                            or (img[i, j - 1] == strong) or (img[i, j + 1] == strong)
+                            or (img[i - 1, j - 1] == strong) or (img[i - 1, j] == strong) or (
+                                    img[i - 1, j + 1] == strong)):
+                        # if the pixel has a neighbor with strong intensity, we elevate the intensity of this pixel
+                        img[i, j] = strong
+                    else:
+                        # demote the pixel's intensity
+                        img[i, j] = 0
+
+        return img
+
+    def __call__(self, gray: cv2.Mat,
+                 low_thresh:float=50, high_thresh:float=150) -> Tuple[cv2.Mat, np.ndarray, np.ndarray]:
+        """
+
+        :param gray:
+        :param low_thresh:
+        :param high_thresh:
+        :return:
+        """
+
+        blur = CannyEdgeDetector.gaussian_blur(gray, (5, 5), 1.4)
+        mag, angle = CannyEdgeDetector.compute_gradients(blur)
+        nms = CannyEdgeDetector.non_maximum_suppression(mag, angle)
+        dt, weak, strong = CannyEdgeDetector.double_threshold(nms, low_thresh, high_thresh)
+        result = CannyEdgeDetector.hysteresis(dt, weak, strong)
+
+        return result, mag, angle
+
 ### Custom LR Schedulers
 def linear_decay(epoch, initial_lr, final_lr, total_epochs, last_decay:float=1e-3):
     """
