@@ -1,0 +1,78 @@
+defaults:
+  - _self_
+
+architecture:
+  image_dimensions: [ 1, 50, 50 ] # channel, width, height
+  # layers is a list of dictionaries
+  layers:
+    - type: Conv2d
+      params:
+        in_channels: 1
+        out_channels: 64
+        kernel_size: 7
+        stride: 2
+        padding: 3
+        bias: false
+    - type: BatchNorm2d
+      params:
+        num_features: 64
+    - type: ReLU
+      params:
+        inplace: true
+    - type: MaxPool2d
+      params:
+        kernel_size: 3
+        stride: 2
+        padding: 1
+    - type: ResidualLayer
+      params:
+        out_channels: 64
+        blocks: 2
+        stride: 1
+    - type: ResidualLayer
+      params:
+        out_channels: 128
+        blocks: 2
+        stride: 2
+    - type: ResidualLayer
+      params:
+        out_channels: 256
+        blocks: 2
+        stride: 2
+    - type: ResidualLayer
+      params:
+        out_channels: 512
+        blocks: 2
+        stride: 2
+    - type: AvgPool2d
+      params:
+        output_size: [ 1, 1 ]
+    - type: Flatten
+      params:
+    - type: Linear
+      params:
+        in_features: 512
+        out_features: 10
+
+save_parameters:
+  model_path: ./models
+  model_name: Original_TestNumberModelForTFLite_new_CLI
+  save_model: true
+  load_model: null
+  trace_sample: true
+training:
+  dataset_path: ./cell_dataset
+  train_test_split: 0.8
+  epochs: 150
+  lrate: 0.015
+  batch_size: 128
+  lrate_scheduler:
+    enable: true
+    type: cosine_annealing
+    parameters:
+      T_max: 30
+hardware:
+  device: cuda
+misc:
+  verbose_architecture: false
+  display_loss: false

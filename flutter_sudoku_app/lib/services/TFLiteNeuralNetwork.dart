@@ -11,10 +11,11 @@ import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
 import 'package:image/image.dart' as img;
 
 class TFLiteNeuralNetwork {
-
   // the path the the .tflite model
   // final String _pathNumberModel = "assets/NumberModel_v0.tflite";
-  final String _pathNumberModel = "assets/test_number_model.tflite";
+  // final String _pathNumberModel = "assets/test_number_model.tflite";
+  final String _pathNumberModel =
+      "assets/Original_TestNumberModelForTFLite_new_CLI.tflite";
 
   // the tflite interpreter used to run inference
   late tfl.Interpreter interpreter;
@@ -29,7 +30,8 @@ class TFLiteNeuralNetwork {
   /// **Returns**:
   /// - A list of 81 tuples where each tuple contains its parsed grid and its
   /// number prediction.
-  Future<List<Tuple2<XFile, int>>> getPartitionedPredictions(XFile warpedImg) async {
+  Future<List<Tuple2<XFile, int>>> getPartitionedPredictions(
+      XFile warpedImg) async {
     if (!initialized) {
       // the neural network has not been loaded in yet
       interpreter = await tfl.Interpreter.fromAsset(_pathNumberModel);
@@ -44,7 +46,8 @@ class TFLiteNeuralNetwork {
     XFile resizedWarpedImg = await resizeImage(warpedImg, 50 * 9, 50 * 9);
 
     // partition the images and store them as a list
-    List<Tuple2<XFile, List<List<List<double>>>>> partionedImgCells = await partitionImage(resizedWarpedImg);
+    List<Tuple2<XFile, List<List<List<double>>>>> partionedImgCells =
+        await partitionImage(resizedWarpedImg);
 
     // initialize the predicted labels
     // Map<int, List<double>> outputs = {};
@@ -54,9 +57,11 @@ class TFLiteNeuralNetwork {
 
     // run the tflite model to obtain the predictions
     // List<double> single_output = List<double>.filled(10, 0);
-    List<List<List<double>>> outputs = List.generate(81, (_) => List.generate(1, (_) => List.filled(10, 0.0)));
+    List<List<List<double>>> outputs =
+        List.generate(81, (_) => List.generate(1, (_) => List.filled(10, 0.0)));
     for (int i = 0; i < partionedImgCells.length; i++) {
-      interpreter.run(partionedImgCells[i].item2.reshape([1, 50, 50, 1]), outputs[i]);
+      interpreter.run(
+          partionedImgCells[i].item2.reshape([1, 50, 50, 1]), outputs[i]);
     }
     // TODO: It would be nice to understand why this method does not work.
     // interpreter.runForMultipleInputs([partionedImgCells], outputs);
@@ -79,12 +84,11 @@ class TFLiteNeuralNetwork {
     log("prediction results: ${result}");
 
     // put the parsed images and their predicted labels in the desired format
-    List<Tuple2<XFile, int>> final_result = List.generate(81,
-        (i) => Tuple2(partionedImgCells[i].item1, result[i]));
+    List<Tuple2<XFile, int>> final_result =
+        List.generate(81, (i) => Tuple2(partionedImgCells[i].item1, result[i]));
 
     return final_result;
   }
-
 
   /// Description: This function takes an image and partitions them into an even
   /// 9x9 grid. The resulting images are flattened and returned as a list of 81
@@ -97,7 +101,8 @@ class TFLiteNeuralNetwork {
   /// - List of tuples where the first tuple element is the parsed image as an XFile (best
   ///   compatible for rendering in Flutter), and the second element is the decoded image (the
   ///   image as a list of bytes, best for running inference)
-  Future<List<Tuple2<XFile, List<List<List<double>>>>>> partitionImage(XFile imageFile) async {
+  Future<List<Tuple2<XFile, List<List<List<double>>>>>> partitionImage(
+      XFile imageFile) async {
     // Read the image from the XFile
     Uint8List imageData = await imageFile.readAsBytes();
 
@@ -114,11 +119,11 @@ class TFLiteNeuralNetwork {
 
     List<List<List<List<double>>>> partitions_in_bytes = List.generate(
       81,
-          (_) => List.generate(
+      (_) => List.generate(
         50,
-            (_) => List.generate(
+        (_) => List.generate(
           50,
-              (_) => [0.0], // 1 channel
+          (_) => [0.0], // 1 channel
         ),
       ),
     );
@@ -150,11 +155,12 @@ class TFLiteNeuralNetwork {
     }
 
     // convert all the images to XFiles
-    List<XFile> xfile_partitions = await imagesToXFiles(path.basenameWithoutExtension(imageFile.name), image_partitions);
+    List<XFile> xfile_partitions = await imagesToXFiles(
+        path.basenameWithoutExtension(imageFile.name), image_partitions);
 
     // pair all the XFiles with their data in bytes
-    List<Tuple2<XFile, List<List<List<double>>>>> partitions = List.generate(81,
-        (i) => Tuple2(xfile_partitions[i], partitions_in_bytes[i]));
+    List<Tuple2<XFile, List<List<List<double>>>>> partitions = List.generate(
+        81, (i) => Tuple2(xfile_partitions[i], partitions_in_bytes[i]));
 
     return partitions;
   }
@@ -168,7 +174,7 @@ class TFLiteNeuralNetwork {
   /// - A float list of the decoded image in grayscale.
   Float32List imageToFloat32(img.Image image) {
     int width = image.width;
-    int height= image.height;
+    int height = image.height;
     final input = Float32List(width * height);
     int index = 0;
 
@@ -190,7 +196,8 @@ class TFLiteNeuralNetwork {
   ///
   /// **Returns**:
   /// - List of images in XFile format.
-  Future<List<XFile>> imagesToXFiles(String prefix, List<img.Image> images) async {
+  Future<List<XFile>> imagesToXFiles(
+      String prefix, List<img.Image> images) async {
     List<XFile> xfileImages = [];
 
     final tempDir = await getTemporaryDirectory();
@@ -237,7 +244,8 @@ class TFLiteNeuralNetwork {
     final resizedImage = img.copyResize(image, width: width, height: height);
 
     final directory = await getTemporaryDirectory();
-    String file_name = '${path.basenameWithoutExtension(xfile.name)}_resized_image.png';
+    String file_name =
+        '${path.basenameWithoutExtension(xfile.name)}_resized_image.png';
     final resizedImagePath = '${directory.path}/$file_name';
     log("Resized image file name: $file_name");
 

@@ -94,6 +94,7 @@ flutter:
     - assets/NumberModel_v0_mobile.pt
     - assets/NumberModel_v0.tflite
     - assets/test_number_model.tflite
+    - assets/Original_TestNumberModelForTFLite_new_CLI.tflite
     - assets/icons/
 
   # An image asset can refer to one or more resolution-specific "variants", see
