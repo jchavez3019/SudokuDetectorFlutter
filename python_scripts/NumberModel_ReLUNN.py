@@ -3,11 +3,11 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Subset
-from torch import Tensor, Size
+from torch import Size
 from tqdm import tqdm
-from typing import Union, Tuple
+from typing import Tuple
 
-from python_helper_functions import get_sudoku_dataset
+from python_scripts.src.training.training_utils import get_sudoku_dataset
 
 save_model = False
 model_path = "models/"

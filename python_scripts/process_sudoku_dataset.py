@@ -26,8 +26,8 @@ import cv2
 import shutil
 import numpy as np
 
-from python_helper_functions import extract_sudoku_puzzle
-from python_scripts.python_helper_functions import parse_processed_dataset
+from python_scripts.src.training.training_utils import extract_sudoku_puzzle
+from python_scripts.src.training.training_utils import parse_processed_dataset
 
 # Configure logging
 logging.basicConfig(

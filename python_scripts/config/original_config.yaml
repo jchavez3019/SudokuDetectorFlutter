@@ -1,7 +1,10 @@
 defaults:
   - default_config
-  - architecture: original_architecture
+#  - architecture: original_architecture
   - _self_
+
+architecture:
+  _target_: src.architectures.original_architecture.OriginalArchitecture
 
 save_parameters:
   model_path: ./models

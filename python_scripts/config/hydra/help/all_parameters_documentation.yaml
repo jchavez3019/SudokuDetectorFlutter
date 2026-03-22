@@ -9,19 +9,7 @@ template: |
   $APP_CONFIG_GROUPS
 
   == Parameters & Descriptions ==
-  architecture : (Any) Model architecture definition.
-
-  training:
-    dataset_path     : (Str) Absolute or relative path to the root directory of the dataset.
-    train_test_split : (Float) Fraction of the dataset to be used for training (0.0 to 1.0).
-    epochs           : (Int) Number of complete passes through the training dataset.
-    lrate            : (Float) Initial learning rate for the optimizer.
-    batch_size       : (Int) Number of samples processed before the model is updated.
-
-    lrate_scheduler:
-      enable     : (Bool) Enable learning rate scheduling.
-      type       : (Str) Type of scheduler to use.
-      parameters : (Dict) Kwargs for the scheduler.
+  architecture : (Any) Model architecture definition. Parsed via Hydra's _target_.
 
   save_parameters:
     model_path   : (Str) Directory where the model artifacts will be saved.

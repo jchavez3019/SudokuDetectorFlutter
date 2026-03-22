@@ -1,9 +1,17 @@
-import os
+import sys
+from pathlib import Path
 from dataclasses import fields, is_dataclass
 from typing import get_origin, get_args, Union, Any, get_type_hints
 
-# Import the root configuration node
-from hydra_types import HydraSettings
+# 1. Dynamically find the project root (one directory up from this script's location)
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent
+
+# 2. Add the project root to sys.path so Python can find the 'src' module
+sys.path.insert(0, str(PROJECT_ROOT))
+
+# 3. Now you can safely import from src using absolute project imports
+from src.facades.hydra_types import HydraSettings
 
 
 def get_readable_type(type_hint) -> str:
@@ -62,7 +70,7 @@ def build_yaml_body(dataclass_type, indent_level=1) -> str:
     return "\n".join(lines)
 
 
-def generate_yaml_file(output_path: str):
+def generate_yaml_file(output_path: Path):
     """Wraps the body in the Hydra template and saves it to disk."""
 
     # Generate the dynamic body starting at indent level 1
@@ -85,7 +93,8 @@ def generate_yaml_file(output_path: str):
   ======================================================================
 """
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    # Create directories if they don't exist
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, 'w') as f:
         f.write(yaml_content)
@@ -94,5 +103,7 @@ def generate_yaml_file(output_path: str):
 
 
 if __name__ == "__main__":
-    target_path = "config/hydra/help/all_parameters_documentation.yaml"
+    # 4. Define the target path explicitly based on the project root
+    target_path = PROJECT_ROOT / "config" / "hydra" / "help" / "all_parameters_documentation.yaml"
+
     generate_yaml_file(target_path)

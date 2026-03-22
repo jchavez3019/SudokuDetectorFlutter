@@ -12,9 +12,9 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class HydraSettings:
-    architecture: Any = field(metadata={"help": "Model architecture definition."})
-    training: TrainingSettings = field(default_factory=lambda:TrainingSettings)
+    architecture: Any = field(metadata={"help": "Model architecture definition. Parsed via Hydra's _target_."})
     save_parameters: SaveParametersSettings = field(default_factory=lambda:SaveParametersSettings)
+    training: TrainingSettings = field(default_factory=lambda:TrainingSettings)
     torch: TorchSettings = field(default_factory=lambda:TorchSettings)
     misc: MiscSettings = field(default_factory=lambda:MiscSettings)
 
