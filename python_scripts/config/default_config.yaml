@@ -1,4 +1,5 @@
 defaults:
+  - override hydra/help: all_parameters_documentation
   - _self_
 
 architecture:

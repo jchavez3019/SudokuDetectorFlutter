@@ -4,12 +4,14 @@ This is a custom implementation of a Residual network. This script can also trai
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from hydra.core.config_store import ConfigStore
 from hydra.core.hydra_config import HydraConfig
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Subset
-from torch import Tensor, Size
+from torch import Tensor
 from tqdm import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm # prevents the standard logger from breaking the progress bar visually
 from typing import *
 from collections import OrderedDict
 import numpy as np
@@ -17,6 +19,7 @@ import hydra
 from pathlib import Path
 import matplotlib.pyplot as plt
 import logging
+
 from hydra_types import (
     HydraSettings,
     SaveParametersSettings,
@@ -27,6 +30,10 @@ from python_helper_functions import get_sudoku_dataset, get_lr_scheduler
 from python_scripts.hydra_types import TrainingSettings
 
 log = logging.getLogger(__name__)
+
+# Register the ConfigStore for strict typing and help generation
+cs = ConfigStore.instance()
+cs.store(name="config_schema", node=HydraSettings)
 
 print(f"Available matplotlib styles: {plt.style.available}")
 plt.rcParams['text.usetex'] = True
@@ -402,53 +409,52 @@ def get_explicit_model(net: NumberModel) -> dict:
 
 def train_model(net: NumberModel, epochs: int, train_loader: DataLoader) -> Tuple[List[float], List[float]]:
     """
-    Trains a model for a number of epochs given a training set.
-    :param net:             Network model to train.
-    :param epochs:          Number of epochs to run.
-    :param train_loader:    The training data loader.
-    :return:                A list of loss values over epochs.
+    Trains a model for a specified number of epochs given a training dataset.
+
+    :param net: Network model to train.
+    :param epochs: Number of epochs to run.
+    :param train_loader: The training data loader.
+    :return: A tuple containing a list of epoch losses and a list of epoch learning rates.
     """
     losses = []
     learning_rates = []
-    epoch_progress_bar = tqdm(range(epochs), desc="Epochs", leave=True)
-    for epoch in range(epochs):
-        epoch_loss = 0.0
-        for batch in train_loader:
-            batch_x, batch_y = batch
-            batch_x = batch_x.to(device)
-            batch_y = batch_y.to(device)
-            curr_epoch_loss = net.step(batch_x, batch_y)
-            epoch_loss += curr_epoch_loss
-            # losses.append(curr_epoch_loss)
-        epoch_loss /= len(train_loader)
-        epoch_lrate = net.scheduler_step()
-        epoch_progress_bar.update(1)
-        epoch_progress_bar.set_postfix({'Epoch Loss': epoch_loss, 'Epoch lrate': epoch_lrate})
 
-        losses.append(epoch_loss)
-        learning_rates.append(epoch_lrate)
+    with logging_redirect_tqdm():
+        epoch_progress_bar = tqdm(range(epochs), desc="Epochs", leave=True)
+        for epoch in epoch_progress_bar:
+            epoch_loss = 0.0
+            for batch_x, batch_y in train_loader:
+                batch_x = batch_x.to(device)
+                batch_y = batch_y.to(device)
+                curr_epoch_loss = net.step(batch_x, batch_y)
+                epoch_loss += curr_epoch_loss
+
+            epoch_loss /= len(train_loader)
+            epoch_lrate = net.scheduler_step()
+
+            epoch_progress_bar.set_postfix({'Epoch Loss': f"{epoch_loss:.4f}", 'Epoch lrate': f"{epoch_lrate:.6f}"})
+
+            losses.append(epoch_loss)
+            learning_rates.append(epoch_lrate)
 
     return losses, learning_rates
 
 def evaluate_model(net: NumberModel, test_loader: DataLoader) -> float:
     """
     Evaluates the accuracy of the model on the test-holdout set.
-    :param net:             Network model to evaluate.
-    :param test_loader:     Dataloader for the test set.
-    :return:                Numerical accuracy on the test set.
+    :param net: Network model to evaluate.
+    :param test_loader: Dataloader for the test set.
+    :return: Numerical accuracy on the test set.
+    :rtype: float
     """
-    # Define a variable to store the total number of correct predictions
     total_correct = 0
-    # Define a variable to store the total number of examples
     total_examples = 0
 
     # Iterate through the test DataLoader to evaluate misclassification rate
     for images, labels in test_loader:
-        # Move images and labels to the device the model is on (e.g., GPU)
         images = images.to(device)
         labels = labels.to(device)
 
-        # Forward pass
         with torch.no_grad():  # No need to compute gradients during inference
             outputs = net(images)
 
@@ -460,17 +466,18 @@ def evaluate_model(net: NumberModel, test_loader: DataLoader) -> float:
         # Update the total number of correct predictions
         total_correct += (predicted == labels).sum().item()
 
-    # Calculate the accuracy
     accuracy = total_correct / total_examples
-
     return accuracy
 
 def save_model(net: NumberModel, architecture: Any, training: TrainingSettings,
                save_parameters: SaveParametersSettings) -> None:
     """
-    Saves the model to the desired path.
-    :param net:                     Network model to save.
-    :return:
+    Saves the PyTorch model state dict and attempts to convert it to a TFLite edge model.
+
+    :param net: Network model to save.
+    :param architecture: Architecture configuration object containing image dimensions.
+    :param training_settings: Configuration object containing training hyperparameters.
+    :param save_parameters: Settings dictating where and how to save the model.
     """
     if log.isEnabledFor(logging.DEBUG):
         for name, layer in net.model.named_children():
@@ -591,14 +598,18 @@ def fit(
         scheduler_params: Optional[Dict[str, Any]] = None,
 ) -> Tuple[List[float], List[float], NumberModel]:
     """
-    Trains the model and returns the losses as well as the model.
-    :param train_dataset:   A randomized subset of the dataset to be used for training the model.
-    :param test_dataset:    A randomized subset of the dataset to be used for evaluating the model.
-    :param epochs:          Number of epochs.
-    :param lrate:           Learning rate.
-    :param loss_fn:         Loss function.
-    :param batch_size:      Number of batches to use per epoch.
-    :return:                Returns the losses as well as the trained model.
+    Initializes and trains the model, returning the loss history and the model itself.
+
+    :param train_dataset: Subset of the dataset used for training.
+    :param test_dataset: Subset of the dataset used for evaluating.
+    :param epochs: Number of epochs to train.
+    :param architecture: Architecture configuration object.
+    :param lrate: Learning rate for the optimizer, defaults to 0.01.
+    :param loss_fn: Loss function, defaults to CrossEntropyLoss.
+    :param batch_size: Number of samples per batch, defaults to 50.
+    :param scheduler_type: String identifier for the learning rate scheduler.
+    :param scheduler_params: Kwargs for the scheduler.
+    :return: A tuple containing lists of losses, learning rates, and the trained model.
     """
     # pass the dataset subsets to dataloaders to pick out shuffled batches of data per epoch
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
@@ -617,25 +628,23 @@ def fit(
 
     # evaluate the model's accuracy on the holdout set
     accuracy = evaluate_model(net, test_loader)
-    log.info('Accuracy:', accuracy)
+    log.info(f'Accuracy: {accuracy}')
 
     return losses, learning_rates, net
 
 @hydra.main(config_path="./config", version_base=None)
 def main(cfg: HydraSettings):
     """
-    Hydra CLI
-    :param cfg: Partial configuration object populated by Hydra from YAML files and CLI overrides.
-    :return:
+    Main entry point for the training pipeline handled by Hydra.
+
+    :param cfg: Strongly typed configuration object populated by Hydra.
+    :type cfg: HydraSettings
     """
     error_file_handler = logging.FileHandler(Path(HydraConfig.get().runtime.output_dir) / 'error.log')
     error_file_handler.setLevel(logging.ERROR)
     log.addHandler(error_file_handler)
     try:
         log.info("Start of training.")
-
-        all_default_params = OmegaConf.structured(HydraSettings)
-        cfg = OmegaConf.merge(all_default_params, cfg)
         log.info(f"Configuration:\n{OmegaConf.to_yaml(cfg)}")
 
         # use deterministic algorithms for the training algorithm

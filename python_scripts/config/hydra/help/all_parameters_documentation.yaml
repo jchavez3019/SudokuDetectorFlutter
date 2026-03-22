@@ -1,0 +1,41 @@
+template: |
+  ======================================================================
+  ==                   NumberModel Training Pipeline                  ==
+  ======================================================================
+
+  == Configuration Groups ==
+  Compose your configuration from these groups (group=option)
+
+  $APP_CONFIG_GROUPS
+
+  == Parameters & Descriptions ==
+  architecture : (Any) Model architecture definition.
+
+  training:
+    dataset_path     : (Str) Absolute or relative path to the root directory of the dataset.
+    train_test_split : (Float) Fraction of the dataset to be used for training (0.0 to 1.0).
+    epochs           : (Int) Number of complete passes through the training dataset.
+    lrate            : (Float) Initial learning rate for the optimizer.
+    batch_size       : (Int) Number of samples processed before the model is updated.
+
+    lrate_scheduler:
+      enable     : (Bool) Enable learning rate scheduling.
+      type       : (Str) Type of scheduler to use.
+      parameters : (Dict) Kwargs for the scheduler.
+
+  save_parameters:
+    model_path   : (Str) Directory where the model artifacts will be saved.
+    model_name   : (Str) Base filename for the saved model (without extension).
+    save_model   : (Bool) Whether to save the model after training.
+    load_model   : (Str/Null) Path to a .pth file to load for evaluation.
+    trace_sample : (Bool) Trace and save layer outputs for a sample.
+
+  torch:
+    device                       : (Str) Hardware device to use: 'cpu', 'cuda', or 'mps'.
+    backends_cudnn_deterministic : (Bool) Enforce deterministic CuDNN.
+    use_deterministic_algorithms : (Bool) Enforce deterministic PyTorch algorithms.
+
+  misc:
+    display_loss : (Bool) Plot and display loss/lrate graphs after training.
+
+  ======================================================================
