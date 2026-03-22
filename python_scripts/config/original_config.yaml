@@ -1,6 +1,7 @@
 defaults:
-  - _self_
+  - default_config
   - architecture: original_architecture
+  - _self_
 
 save_parameters:
   model_path: ./models
@@ -19,8 +20,10 @@ training:
     type: cosine_annealing
     parameters:
       T_max: 30
-hardware:
+torch:
   device: cuda
+  backends_cudnn_deterministic: true
+  use_deterministic_algorithms: true
 misc:
   verbose_architecture: false
   display_loss: true

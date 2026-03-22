@@ -10,7 +10,10 @@ from torch import Tensor, Size
 import torch.optim as optim
 from pathlib import Path
 from functools import partial
+import logging
 from typing import *
+
+log = logging.getLogger(__name__)
 
 class SudokuDataset(torch.utils.data.Dataset):
     """
@@ -37,13 +40,12 @@ class SudokuDataset(torch.utils.data.Dataset):
 
 def get_sudoku_dataset(dataset_path: str, split: float = 0.8,
                        supported_extensions: Tuple[str] = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff'),
-                       verbose: bool = False) -> Tuple[torch.utils.data.dataset, Subset, Subset, Size]:
+                       ) -> Tuple[torch.utils.data.dataset, Subset, Subset, Size]:
     """
     Returns a training and testing dataset of sudoku images as well as the dimension of a single image.
     :param dataset_path:            Path to the sudoku dataset.
     :param split:                   The desired training to testing split ratio.
     :param supported_extensions:    The type of images supported by the dataset.
-    :param verbose:                 If true, prints additional information.
     :return:
     """
     # Initialize lists to store image file paths and their corresponding labels
@@ -55,8 +57,7 @@ def get_sudoku_dataset(dataset_path: str, split: float = 0.8,
         label_directory = os.path.join(dataset_path, label_path)
         if not os.path.isdir(label_directory):
             # the label_directory is not a valid path
-            if verbose:
-                print(f"Skipping {label_path}")
+            log.debug(f"Skipping {label_path}")
             continue
         for ext in supported_extensions:
             # Iterate through each supported file extension and add them to the total
@@ -76,10 +77,9 @@ def get_sudoku_dataset(dataset_path: str, split: float = 0.8,
     # convert each decoded image into a tensor
     all_images = format_inputs_cells(all_images)
 
-    if verbose:
-        print("Dataset shapes:")
-        print(f"\tShape labels: {labels.shape}, dtype: {labels.dtype}")
-        print(f"\tShape all_images: {all_images.shape}, dtype: {all_images.dtype}")
+    log.debug("Dataset shapes:")
+    log.debug(f"\tShape labels: {labels.shape}, dtype: {labels.dtype}")
+    log.debug(f"\tShape all_images: {all_images.shape}, dtype: {all_images.dtype}")
 
     # compile all images and labels into a TensorDataset and compute the sizes
     dataset = SudokuDataset(all_images, labels)
@@ -93,7 +93,7 @@ def get_sudoku_dataset(dataset_path: str, split: float = 0.8,
     return dataset, train_data, test_data, single_image_dimension
 
 def resize_image_high_quality(image: Union[cv2.Mat, np.ndarray[Any, np.dtype]], target_width: int = 3400, target_height: int = 2500,
-                              interpolation_method: int = cv2.INTER_LANCZOS4, verbose: bool = False):
+                              interpolation_method: int = cv2.INTER_LANCZOS4):
     """
     Resize the image to the target dimension only if current dimensions are smaller. Uses high-quality interpolation methods.
     :param image:                   Input image (numpy array)
@@ -101,29 +101,27 @@ def resize_image_high_quality(image: Union[cv2.Mat, np.ndarray[Any, np.dtype]], 
     :param target_height:           Target height (default: 2500)
     :param interpolation_method:    INTER_CUBIC produces high quality scaling, and INTER_LANCZOS4 has even higher
                                     quality with slower speed.
-    :param verbose:                 If true, prints additional information.
     :return:                        Resized image or original image if already large enough.
     """
     current_height, current_width = image.shape[:2]
     if current_width >= target_width and current_height >= target_height:
         # if the image is already larger than the target size, return it as is
-        if verbose: print(f"Image already large enough ({current_width}x{current_height}). No resize needed.")
+        log.debug(f"Image already large enough ({current_width}x{current_height}). No resize needed.")
         return image
 
-    if verbose: print(f"Resizing from {current_width}x{current_height} to {target_width}x{target_height}")
+    log.debug(f"Resizing from {current_width}x{current_height} to {target_width}x{target_height}")
 
     # resize the image
     resized = cv2.resize(image, (target_width, target_height), interpolation=interpolation_method)
 
     return resized
 
-def extract_sudoku_puzzle(image_path: str, new_size: Optional[Tuple[int, int]] = None, verbose: bool = False,
+def extract_sudoku_puzzle(image_path: str, new_size: Optional[Tuple[int, int]] = None,
                           display: bool = False) -> Union[cv2.Mat, np.ndarray[Any, np.dtype]]:
     """
     Extracts a warped and cropped sudoku puzzle from an image.
     :param image_path:  The path of the image to extract the sudoku puzzle from.
     :param new_size:    If specified, the size of the final image should match.
-    :param verbose:     If true, prints additional information.
     :param display:     If true, plots are displayed of each step of transformation.
     :return:            A resulting image that extracts soley the Sudoku puzzle from the original image.
     """
@@ -135,8 +133,7 @@ def extract_sudoku_puzzle(image_path: str, new_size: Optional[Tuple[int, int]] =
     img_width = gray_image.shape[1]
     img_height = gray_image.shape[0]
 
-    if verbose:
-        print(f"Shape of image: {img_width}, {img_height}")
+    log.debug(f"Shape of image: {img_width}, {img_height}")
 
     modified_image = cv2.addWeighted(gray_image, 1.2, gray_image, 0, 0.0)
     modified_image = cv2.medianBlur(modified_image, 25)
@@ -172,15 +169,13 @@ def extract_sudoku_puzzle(image_path: str, new_size: Optional[Tuple[int, int]] =
 
     contourArea = cv2.contourArea(approx)
     # if len(approx) == 4 and abs(contourArea) > 2000 and cv2.isContourConvex(approx):
-    if verbose:
-        print(f"This is a valid contour; Area of contour is {contourArea}; Shape of approx is {approx.shape}")
+    log.debug(f"This is a valid contour; Area of contour is {contourArea}; Shape of approx is {approx.shape}")
     for i in range(len(approx)):
         point = np.squeeze(approx[i])
-        print(f"Point_{i}: ({point[0]},{point[1]})")
+        log.debug(f"Point_{i}: ({point[0]},{point[1]})")
 
     temp_approx = np.squeeze(approx)
-    if verbose:
-        print(f"temp_approx shape {temp_approx.shape}")
+    log.debug(f"temp_approx shape {temp_approx.shape}")
     abs_vals = np.array([temp_approx[i, 0] * temp_approx[i, 1] for i in range(temp_approx.shape[0])])
     tl_idx = np.argmin(abs_vals)
     br_idx = np.argmax(abs_vals)
@@ -193,8 +188,7 @@ def extract_sudoku_puzzle(image_path: str, new_size: Optional[Tuple[int, int]] =
         other_idx[1], 0] else temp_approx[other_idx[1], :]
 
     reordered_approx = np.expand_dims(np.array([top_left, top_right, bottom_right, bottom_left]), axis=1)
-    if verbose:
-        print(f"Reordered: \n{reordered_approx}")
+    log.debug(f"Reordered: \n{reordered_approx}")
     approx = reordered_approx
     # break
 
@@ -215,9 +209,8 @@ def extract_sudoku_puzzle(image_path: str, new_size: Optional[Tuple[int, int]] =
     # Apply the perspective transformation
     result_img = cv2.warpPerspective(colored_image, transformation_matrix, (int(square_size), int(square_size)))
 
-    if verbose:
-        print(f"Orientation: {orientation}, Square Size: {square_size}, Image dimensions: {original_image.shape}")
-        print(f"Target (x,y) coordinates:\n{target_coordinates}")
+    log.debug(f"Orientation: {orientation}, Square Size: {square_size}, Image dimensions: {original_image.shape}")
+    log.debug(f"Target (x,y) coordinates:\n{target_coordinates}")
 
     if display:
         # display results
@@ -292,8 +285,8 @@ def parse_processed_dataset(dataset_path: str, out_path: str,
                 cv2.imwrite(str(label_path / f"{folder_counter[label]}.jpg"), cell)
                 folder_counter[label] += 1
             except IndexError:
-                print(f"Len cells {len(cells)}, len labels: {len(labels)}")
-                print(f"Index out of range: {label}. File name: {image_fn}")
+                log.error(f"Len cells {len(cells)}, len labels: {len(labels)}")
+                log.error(f"Index out of range: {label}. File name: {image_fn}")
 
 
 def parse_cells(extracted_img: Union[str, np.ndarray], dat_path: str) -> Tuple[list[np.ndarray], np.ndarray]:
@@ -499,18 +492,15 @@ def linear_decay(epoch, initial_lr, final_lr, total_epochs, last_decay:float=1e-
     #     return last_decay
     return 1 - epoch / total_epochs * (1 - final_lr / initial_lr)
 
-def get_lr_scheduler(scheduler_type: str, optimizer: optim.Optimizer, lr_parameters: Dict[str, Any],
-                     verbose: bool = False):
+def get_lr_scheduler(scheduler_type: str, optimizer: optim.Optimizer, lr_parameters: Dict[str, Any]):
     """
     Return the learning rate scheduler to use from a common set.
     :param scheduler_type:
     :param optimizer:
     :param lr_parameters:
-    :param verbose:
     :return:
     """
-    if verbose:
-        print(f"Using {scheduler_type} learning rate scheduler with parameters: {lr_parameters}")
+    log.debug(f"Using {scheduler_type} learning rate scheduler with parameters: {lr_parameters}")
 
     # set linear LR scheduler
     scheduler = None
@@ -527,6 +517,8 @@ def get_lr_scheduler(scheduler_type: str, optimizer: optim.Optimizer, lr_paramet
     elif scheduler_type == 'none':
         pass
     else:
-        raise ValueError(f"Scheduler type of {scheduler_type} is not recognized")
+        err_msg = f"Scheduler type of {scheduler_type} is not recognized"
+        log.error(err_msg)
+        raise ValueError(err_msg)
 
     return scheduler

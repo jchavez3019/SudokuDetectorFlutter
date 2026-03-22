@@ -4,6 +4,7 @@ This is a custom implementation of a Residual network. This script can also trai
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf, DictConfig
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Subset
@@ -15,10 +16,17 @@ import numpy as np
 import hydra
 from pathlib import Path
 import matplotlib.pyplot as plt
+import logging
+from hydra_types import (
+    HydraSettings,
+    SaveParametersSettings,
+)
 
 # from config.config_schema import Config, Architecture, LRateScheduler
-from arguments import Config
 from python_helper_functions import get_sudoku_dataset, get_lr_scheduler
+from python_scripts.hydra_types import TrainingSettings
+
+log = logging.getLogger(__name__)
 
 print(f"Available matplotlib styles: {plt.style.available}")
 plt.rcParams['text.usetex'] = True
@@ -149,7 +157,7 @@ class NumberModel(nn.Module):
         self.scheduler = None
         self.scheduler_type = scheduler_type
         if scheduler_type is not None:
-            self.scheduler = get_lr_scheduler(scheduler_type, self.optimizer, scheduler_params, verbose=True)
+            self.scheduler = get_lr_scheduler(scheduler_type, self.optimizer, scheduler_params)
 
 
     def _make_layer(self, block, out_channels: int, blocks: int, stride: int = 1):
@@ -242,12 +250,11 @@ class NetParser:
             "ResidualLayer": self._parse_residual_layer,
         }
 
-    def parse_net(self, net: NumberModel, verbose: bool = False) -> dict:
+    def parse_net(self, net: NumberModel) -> dict:
         """
         Parses a network model and creates a custom dictionary that may be later used to
         create an equivalent TensorFlow model.
         :param net:         The network model to parse.
-        :param verbose:     If true, print the name of each layer and their immediate submodules.
         :return:            Returns a dictionary describing the model's parameters.
         """
         model_dict = {}
@@ -255,9 +262,8 @@ class NetParser:
             # each layer starts with a digit followed by its type
             # which is in {ResidualBasicBlock, Conv2d, BatchNorm2d, ReLU, MaxPool2d, AvgPool2d, Flatten, and Linear}
             layer_digit, layer_type = name.split("_", 1)
-            if verbose:
-                print(f"Layer name: {name}")
-                print(f"Layer items: {layer}")
+            log.debug(f"Layer name: {name}")
+            log.debug(f"Layer items: {layer}")
 
             layer_params = self.parse_layer(name, layer_type, layer, net.residual_args)
             model_dict[name] = layer_params
@@ -383,15 +389,14 @@ class NetParser:
 
         return residual_params
 
-def get_explicit_model(net: NumberModel, verbose: bool = False) -> dict:
+def get_explicit_model(net: NumberModel) -> dict:
     """
     Creates a custom dictionary which explicitly describes the structure of the model and its parameters.
     :param net:         Network model to parse.
-    :param verbose:     If true, print the name of each layer and its immediate submodules.
     :return:            A dictionary describing the structure of the model.
     """
     net_parser = NetParser()
-    torch_model_dict = net_parser.parse_net(net, verbose=verbose)
+    torch_model_dict = net_parser.parse_net(net)
     return torch_model_dict
 
 
@@ -460,35 +465,35 @@ def evaluate_model(net: NumberModel, test_loader: DataLoader) -> float:
 
     return accuracy
 
-def save_model(net: NumberModel, verbose_architecture: bool = False):
+def save_model(net: NumberModel, architecture: Any, training: TrainingSettings,
+               save_parameters: SaveParametersSettings) -> None:
     """
     Saves the model to the desired path.
     :param net:                     Network model to save.
-    :param verbose_architecture:    If true, print the network's architecture.
-    :return: 
+    :return:
     """
-    if verbose_architecture:
+    if log.isEnabledFor(logging.DEBUG):
         for name, layer in net.model.named_children():
             # each layer starts with a digit followed by its type
             # which is in {ResidualBasicBlock, Conv2d, BatchNorm2d, ReLU, MaxPool2d, AvgPool2d, Flatten, and Linear}
             layer_digit, layer_type = name.split("_", 1)
-            print(f"Layer name: {name}")
-            print(f"Layer items: {layer}")
+            log.debug(f"Layer name: {name}")
+            log.debug(f"Layer items: {layer}")
 
     # We format our own state dictionary with more verbose parameters and attributes
     # instead of the default network state dictionary. This makes it easier to use this .pth
     # file to initialize a Keras model.
-    custom_state_dict = get_explicit_model(net, verbose=True)
-    torch_test_samples = torch.rand(1, *Config.architecture.image_dimensions).to(dtype=torch.float32, device=device)
+    custom_state_dict = get_explicit_model(net)
+    torch_test_samples = torch.rand(1, *architecture.image_dimensions).to(dtype=torch.float32, device=device)
     pth_dict = {
         "custom_state_dict": custom_state_dict, # typically you would use NetObject.state_dict()
-        "lrate": Config.training.lrate,
+        "lrate": training.lrate,
         "loss_fn": None,
-        "image_dim": Config.architecture.image_dimensions,
+        "image_dim": architecture.image_dimensions,
         "out_size": 10,
         "test_samples": to_numpy(torch_test_samples),
     }
-    if Config.save_parameters.trace_sample:
+    if save_parameters.trace_sample:
         # pass our batch of randomized samples and trace the network's output throughout each layer
         pth_dict["trace"] = net.forward_trace(torch_test_samples)[1]
     net = net.to(device=device)
@@ -497,24 +502,24 @@ def save_model(net: NumberModel, verbose_architecture: bool = False):
     pth_dict["test_sample_outputs"] = output
     pth_dict["state_dict"] = net.state_dict()
 
-    save_path = Path(Config.save_parameters.model_path) / f"{Config.save_parameters.model_name}.pth"
+    save_path = Path(save_parameters.model_path) / f"{save_parameters.model_name}.pth"
     torch.save(pth_dict, save_path)
-    print(f"Torch model saved to path: {save_path}")
+    log.info(f"Torch model saved to path: {save_path}")
 
     try:
         import litert_torch
 
-        print("Starting TFLite conversion...")
+        log.info("Starting TFLite conversion...")
 
         # DIAGNOSTIC: Print what we're converting with
-        print(f"Config.architecture.image_dimensions: {Config.architecture.image_dimensions}")
-        print(f"torch_test_samples.shape: {torch_test_samples.shape}")
+        log.debug(f"architecture.image_dimensions: {architecture.image_dimensions}")
+        log.debug(f"torch_test_samples.shape: {torch_test_samples.shape}")
 
         net_cpu = net.cpu()
         test_samples_cpu = torch_test_samples.cpu()
 
         # DIAGNOSTIC: Verify input shape before conversion
-        print(f"test_samples_cpu.shape before conversion: {test_samples_cpu.shape}")
+        log.debug(f"test_samples_cpu.shape before conversion: {test_samples_cpu.shape}")
 
         edge_model = litert_torch.convert(
             net_cpu.eval(),
@@ -523,23 +528,23 @@ def save_model(net: NumberModel, verbose_architecture: bool = False):
 
         # DIAGNOSTIC: Test with the same input used for conversion
         tf_output = edge_model(test_samples_cpu)
-        print(f"✓ Forward inference with conversion samples works")
-        print(f"  Output shape: {tf_output.shape}")
+        log.debug(f"✓ Forward inference with conversion samples works")
+        log.debug(f"  Output shape: {tf_output.shape}")
 
         # DIAGNOSTIC: Now test with 50x50 input (what Flutter provides)
         test_50x50 = torch.rand(1, 1, 50, 50).cpu()
-        print(f"\nTesting with 50×50 input (Flutter size): {test_50x50.shape}")
+        log.debug(f"Testing with 50×50 input (Flutter size): {test_50x50.shape}")
         try:
             output_50x50 = edge_model(test_50x50)
-            print(f"✓ Model accepts 50×50 input!")
-            print(f"  Output shape: {output_50x50.shape}")
+            log.debug(f"✓ Model accepts 50×50 input!")
+            log.debug(f"  Output shape: {output_50x50.shape}")
         except Exception as e:
-            print(f"✗ Model REJECTS 50×50 input: {e}")
-            print(f"  This confirms the dimension mismatch!")
+            log.debug(f"✗ Model REJECTS 50×50 input: {e}")
+            log.debug(f"  This confirms the dimension mismatch!")
 
         tflite_path = str(save_path).replace(".pth", ".tflite")
         edge_model.export(tflite_path)
-        print(f"✓ TFLite model saved to: {tflite_path}")
+        log.info(f"✓ TFLite model saved to: {tflite_path}")
 
         # DIAGNOSTIC: Verify the exported .tflite file's input shape
         from ai_edge_litert.interpreter import Interpreter
@@ -548,36 +553,37 @@ def save_model(net: NumberModel, verbose_architecture: bool = False):
         input_details = interpreter.get_input_details()
         output_details = interpreter.get_output_details()
 
-        print(f"\n=== EXPORTED TFLITE MODEL INFO ===")
-        print(f"Input shape: {input_details[0]['shape']}")
-        print(f"Input dtype: {input_details[0]['dtype']}")
-        print(f"Output shape: {output_details[0]['shape']}")
+        log.info(f"=== EXPORTED TFLITE MODEL INFO ===")
+        log.info(f"Input shape: {input_details[0]['shape']}")
+        log.info(f"Input dtype: {input_details[0]['dtype']}")
+        log.info(f"Output shape: {output_details[0]['shape']}")
 
         # Calculate expected number of elements
         input_shape = input_details[0]['shape']
         expected_elements = np.prod(input_shape)
-        print(f"Expected input elements: {expected_elements}")
-        print(f"Flutter provides: {1 * 50 * 50 * 1} = 2500 elements")
+        log.info(f"Expected input elements: {expected_elements}")
+        log.info(f"Flutter provides: {1 * 50 * 50 * 1} = 2500 elements")
 
         if expected_elements != 2500:
-            print(f"\n⚠️  MISMATCH CONFIRMED! ⚠️")
-            print(f"The TFLite model expects {expected_elements} elements")
-            print(f"But Flutter provides 2500 elements (50×50)")
-            print(f"\nYou need to change Config.architecture.image_dimensions to [1, 50, 50]")
+            log.warning(f"⚠️  MISMATCH CONFIRMED! ⚠️")
+            log.warning(f"The TFLite model expects {expected_elements} elements")
+            log.warning(f"But Flutter provides 2500 elements (50×50)")
+            log.warning(f"You need to change architecture.image_dimensions to [1, 50, 50]")
         else:
-            print(f"\n✓ Input dimensions match! Model should work in Flutter.")
+            log.info(f"✓ Input dimensions match! Model should work in Flutter.")
     except Exception as e:
-        print(f"✗ TFLite conversion failed: {e}")
+        log.error(f"✗ TFLite conversion failed: {e}")
         import traceback
         traceback.print_exc()
 
-    print(f"Forward inference in PyTorch with test samples: \n{output}")
-    print(f"output.dtype: {output.dtype}")
+    log.info(f"Forward inference in PyTorch with test samples: \n{output}")
+    log.info(f"output.dtype: {output.dtype}")
 
 def fit(
         train_dataset: Subset,
         test_dataset: Subset,
         epochs: int,
+        architecture: Any,
         lrate: float = 0.01,
         loss_fn = nn.CrossEntropyLoss(),
         batch_size: int = 50,
@@ -599,7 +605,7 @@ def fit(
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
     # initialize net and send to a device
-    net = NumberModel(lrate, Config.architecture, loss_fn, scheduler_type=scheduler_type, scheduler_params=scheduler_params).to(device)
+    net = NumberModel(lrate, architecture, loss_fn, scheduler_type=scheduler_type, scheduler_params=scheduler_params).to(device)
 
     # train the model
     losses, learning_rates = train_model(net, epochs, train_loader)
@@ -611,98 +617,102 @@ def fit(
 
     # evaluate the model's accuracy on the holdout set
     accuracy = evaluate_model(net, test_loader)
-    print('Accuracy:', accuracy)
+    log.info('Accuracy:', accuracy)
 
     return losses, learning_rates, net
 
 @hydra.main(config_path="./config", version_base=None)
-def main(cfg: DictConfig):
+def main(cfg: HydraSettings):
+    """
+    Hydra CLI
+    :param cfg: Partial configuration object populated by Hydra from YAML files and CLI overrides.
+    :return:
+    """
+    error_file_handler = logging.FileHandler(Path(HydraConfig.get().runtime.output_dir) / 'error.log')
+    error_file_handler.setLevel(logging.ERROR)
+    log.addHandler(error_file_handler)
+    try:
+        log.info("Start of training.")
 
-    # Update the Config handler using the Hydra .yaml file.
-    # This method also updates the configuration using command line arguments.
-    # Config should be used instead of cfg since Config will now be read-only and accessible globally.
-    Config.setup(cfg)
+        all_default_params = OmegaConf.structured(HydraSettings)
+        cfg = OmegaConf.merge(all_default_params, cfg)
+        log.info(f"Configuration:\n{OmegaConf.to_yaml(cfg)}")
 
-    # Print the .yaml configuration settings and architecture
-    print("Configuration:")
-    print(Config)
+        # use deterministic algorithms for the training algorithm
+        torch.backends.cudnn.deterministic = cfg.torch.backends_cudnn_deterministic
+        torch.use_deterministic_algorithms(cfg.torch.use_deterministic_algorithms)
 
-    global device
-    device = Config.hardware.device
-    lrate = Config.training.lrate
-    if Config.save_parameters.load_model is not None:
-        pth_path = Config.save_parameters.load_model
-        pth_dict = torch.load(pth_path, map_location=device)
-        _, _, _, single_image_dimension = get_sudoku_dataset(verbose=False)
-        net = NumberModel(lrate, Config.architecture, None,
-                          scheduler_type=Config.training.lrate_scheduler.type,
-                          scheduler_params=Config.training.lrate_scheduler.parameters,
-                          ).to(device)
-        net.load_state_dict(pth_dict["state_dict"])
-        net.eval()
-        test_samples = torch.from_numpy(pth_dict["test_samples"]).to(dtype=torch.float32, device=device)
-        output_samples = to_numpy(net(test_samples))
-        gt_output_samples = pth_dict["test_sample_outputs"]
-        # for the outputs to match, the device the model is run on should also be the same
-        outputs_match = np.allclose(output_samples, gt_output_samples)
-        print(f"Does this evaluation match the ground truth outputs? {outputs_match}")
-    else:
+        global device
+        device = cfg.torch.device
+        lrate = cfg.training.lrate
+        if cfg.save_parameters.load_model is not None:
+            pth_path = cfg.save_parameters.load_model
+            pth_dict = torch.load(pth_path, map_location=device)
+            _, _, _, single_image_dimension = get_sudoku_dataset(
+                dataset_path=cfg.training.dataset_path, split=cfg.training.train_test_split
+            )
+            net = NumberModel(lrate, cfg.architecture, None,
+                              scheduler_type=cfg.training.lrate_scheduler.type,
+                              scheduler_params=cfg.training.lrate_scheduler.parameters,
+                              ).to(device)
+            net.load_state_dict(pth_dict["state_dict"])
+            net.eval()
+            test_samples = torch.from_numpy(pth_dict["test_samples"]).to(dtype=torch.float32, device=device)
+            output_samples = to_numpy(net(test_samples))
+            gt_output_samples = pth_dict["test_sample_outputs"]
+            # for the outputs to match, the device the model is run on should also be the same
+            outputs_match = np.allclose(output_samples, gt_output_samples)
+            log.info(f"Does this evaluation match the ground truth outputs? {outputs_match}")
+        else:
 
-        # load in the sudoku dataset
-        sudoku_dataset, train_data, test_data, single_image_dimension = get_sudoku_dataset(
-            dataset_path=Config.training.dataset_path, split=Config.training.train_test_split,verbose=True
-        )
-        assert single_image_dimension == torch.Size(Config.architecture.image_dimensions), \
-            ("The dimensions of an image from the Sudoku dataset does not match the dimensions specified in the "
-             "configuration file.")
+            # load in the sudoku dataset
+            sudoku_dataset, train_data, test_data, single_image_dimension = get_sudoku_dataset(
+                dataset_path=cfg.training.dataset_path, split=cfg.training.train_test_split
+            )
+            assert single_image_dimension == torch.Size(cfg.architecture.image_dimensions), \
+                ("The dimensions of an image from the Sudoku dataset does not match the dimensions specified in the "
+                 "configuration file.")
 
-        # fit the neural network
-        params = {
-            "train_dataset": train_data,
-            "test_dataset": test_data,
-            "epochs": Config.training.epochs,
-            "lrate": lrate,
-            "loss_fn": nn.CrossEntropyLoss(weight=sudoku_dataset.weights),
-            "batch_size": Config.training.batch_size,
-            "scheduler_type": Config.training.lrate_scheduler.type,
-            "scheduler_params": Config.training.lrate_scheduler.parameters,
-        }
-        losses, learning_rates, net = fit(**params)
+            # fit the neural network
+            params = {
+                "train_dataset": train_data,
+                "test_dataset": test_data,
+                "epochs": cfg.training.epochs,
+                "architecture": cfg.architecture,
+                "lrate": lrate,
+                "loss_fn": nn.CrossEntropyLoss(weight=sudoku_dataset.weights),
+                "batch_size": cfg.training.batch_size,
+                "scheduler_type": cfg.training.lrate_scheduler.type,
+                "scheduler_params": cfg.training.lrate_scheduler.parameters,
+            }
+            losses, learning_rates, net = fit(**params)
 
-        if Config.misc.display_loss:
-            # if true, show the resulting training loss
-            fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(18, 14))
-            ax1, ax2 = np.ravel(axs)
+            if cfg.misc.display_loss:
+                # if true, show the resulting training loss
+                fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(18, 14))
+                ax1, ax2 = np.ravel(axs)
 
-            ax1.plot(losses)
-            ax1.set_xlabel("Epoch")
-            ax1.set_ylabel("Loss")
-            ax1.set_title("Training Loss")
-            ax1.grid()
+                ax1.plot(losses)
+                ax1.set_xlabel("Epoch")
+                ax1.set_ylabel("Loss")
+                ax1.set_title("Training Loss")
+                ax1.grid()
 
-            ax2.plot(learning_rates)
-            ax2.set_xlabel("Epoch")
-            ax2.set_ylabel("Learning Rate")
-            ax2.set_title("Training Learning Rates")
-            ax2.grid()
+                ax2.plot(learning_rates)
+                ax2.set_xlabel("Epoch")
+                ax2.set_ylabel("Learning Rate")
+                ax2.set_title("Training Learning Rates")
+                ax2.grid()
 
-            plt.show()
+                plt.show()
 
-        if Config.save_parameters.save_model:
-            # save the model after training
-            save_model(net, Config.misc.verbose_architecture)
+            if cfg.save_parameters.save_model:
+                # save the model after training
+                save_model(net, cfg.architecture, cfg.training, cfg.save_parameters)
+            log.info("Done training.")
+    except Exception:
+        log.exception("Training ended with an unhandled exception.")
+        raise
 
 if __name__ == "__main__":
-    """
-    Trains and tests the accuracy of the network
-    """
-    # Parse custom flags (like --port) and strip them from sys.argv
-    # This prevents Hydra from crashing on unknown flags.
-    Config.parse_custom_args()
-
-    # use deterministic algorithms for the training algorithm
-    torch.backends.cudnn.deterministic = True
-    torch.use_deterministic_algorithms(True)
-
-    # run the main program
     main()

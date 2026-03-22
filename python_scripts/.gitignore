@@ -1,2 +1,3 @@
 # ignore trained models as they can be too large for git
 models/
+warped_dataset/

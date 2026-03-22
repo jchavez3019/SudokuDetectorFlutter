@@ -71,8 +71,9 @@ training:
     type: cosine_annealing
     parameters:
       T_max: 30
-hardware:
+torch:
   device: cuda
+  backends_cudnn_deterministic: true
+  use_deterministic_algorithms: true
 misc:
-  verbose_architecture: false
   display_loss: false
